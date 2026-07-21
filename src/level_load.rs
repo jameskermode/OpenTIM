@@ -149,10 +149,13 @@ fn part_load<F>(p: &level_file_format::Part, part: &mut tim_c::Part, part_ptr_fr
     }
 
     if let Some(a) = p.pulley_part_index {
-        // Assmes the part it's referring to has already been initialized
+        // Assmes the part it's referring to has already been initialized.
+        // The index is 0xFFFF when the pulley isn't linked to anything, in which case
+        // part_ptr_from_index gives us a null pointer and there's no rope to copy.
         let other_part_raw = part_ptr_from_index(a);
-        let other_part = unsafe { other_part_raw.as_ref().unwrap() };
-        part.rope_data[1] = other_part.rope_data[0];
+        if let Some(other_part) = unsafe { other_part_raw.as_ref() } {
+            part.rope_data[1] = other_part.rope_data[0];
+        }
     }
 
     unsafe {

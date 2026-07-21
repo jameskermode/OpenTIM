@@ -10,6 +10,7 @@ mod atmosphere;
 mod part;
 mod parts;
 mod math;
+#[cfg(feature = "gui")]
 mod nannou;
 pub mod tim_c;
 mod level_file_format;
@@ -20,10 +21,79 @@ use level_load::level_load;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let args: Vec<String> = std::env::args().collect();
-        let level_filename = &args[2];
-        let buf: Vec<u8> = std::fs::read(level_filename)?;
 
-        let level_opts = level_file_format::GameOptions::Tim { freeform_mode: true };
+        // `opentim <game-dir> --list-resources` dumps the archive index and exits.
+        if args.get(2).map(|s| s.as_str()) == Some("--list-resources") {
+            let mut resources = resource_dos::from_map(&args[1], "RESOURCE.MAP")?;
+            let mut names: Vec<String> = resources.iter_filenames().map(|s| s.into()).collect();
+            names.sort();
+            println!("{} entries in RESOURCE.MAP", names.len());
+            for n in names {
+                println!("  {}", n);
+            }
+            return Ok(());
+        }
+
+        // `opentim <game-dir> --extract <NAME> <out-file>` writes a raw archive payload out.
+        if args.get(2).map(|s| s.as_str()) == Some("--extract") {
+            let mut resources = resource_dos::from_map(&args[1], "RESOURCE.MAP")?;
+            let mut tmp_buf = vec![0; 4000000];
+            let raw = resources
+                .read(&args[3], &mut tmp_buf)
+                .ok_or_else(|| format!("no resource entry named {}", &args[3]))?;
+            std::fs::write(&args[4], raw)?;
+            println!("wrote {} bytes", raw.len());
+            return Ok(());
+        }
+
+        // `opentim <game-dir> --dump-images <out-dir> [name-filter]` decodes sprites to PPM.
+        if args.get(2).map(|s| s.as_str()) == Some("--dump-images") {
+            let out_dir = &args[3];
+            let filter = args.get(4).cloned();
+            std::fs::create_dir_all(out_dir)?;
+            let mut count = 0;
+            load_images(&mut |filename, slice_idx, width, height, buf| {
+                if let Some(f) = &filter {
+                    if !filename.contains(f.as_str()) { return; }
+                }
+                let path = format!("{}/{}.{}.ppm", out_dir, filename, slice_idx);
+                debug::write_raster_to_ppm(&path, &buf, width as usize, height as usize, width as usize * 4).unwrap();
+                count += 1;
+            })?;
+            println!("wrote {} images to {}", count, out_dir);
+            return Ok(());
+        }
+
+        let level_filename = &args[2];
+
+        // A level is either a saved machine on disk (freeform, e.g. CATOMATC.TIM) or a
+        // puzzle entry inside RESOURCE.MAP (e.g. L1.LEV).
+        let (buf, from_archive): (Vec<u8>, bool) = match std::fs::read(level_filename) {
+            Ok(b) => (b, false),
+            Err(_) => {
+                let mut resources = resource_dos::from_map(&args[1], "RESOURCE.MAP")?;
+                let mut tmp_buf = vec![0; 1000000];
+                let raw = resources
+                    .read(level_filename, &mut tmp_buf)
+                    .ok_or_else(|| format!("no file or resource entry named {}", level_filename))?
+                    .to_vec();
+
+                // Archive payloads may be compressed. Level magic is 0xACED (TIM), 0xACEE
+                // (Toons) or 0xACEF (TIM2); pass any of them through so that unsupported
+                // versions are reported as BadMagic rather than as a bogus decode failure.
+                let is_raw_level =
+                    raw.len() >= 2 && raw[1] == 0xac && (0xed..=0xef).contains(&raw[0]);
+                if is_raw_level {
+                    (raw, true)
+                } else {
+                    let mut out = vec![0; 1000000];
+                    let decoded = decoders::generic_decode(&raw, &mut out)?.to_vec();
+                    (decoded, true)
+                }
+            }
+        };
+
+        let level_opts = level_file_format::GameOptions::Tim { freeform_mode: !from_archive };
 
         let level = level_file_format::read(&buf, &level_opts)?;
         println!("{:?}", level);
@@ -41,18 +111,52 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Done loading!");
     }
 
-    if true {
-        nannou::start();
-    } else {
+    #[cfg(feature = "gui")]
+    nannou::start();
+
+    #[cfg(not(feature = "gui"))]
+    {
+        // Headless: step the simulation and report where the moving parts ended up.
+        let ticks: u32 = std::env::args().nth(3).and_then(|s| s.parse().ok()).unwrap_or(60);
+
+        println!("--- parts as loaded ---");
+        print_summary();
+
         unsafe {
-            for _ in 0..60 {
+            for _ in 0..ticks {
                 tim_c::advance_parts();
                 tim_c::all_parts_set_prev_vars();
             }
         }
+
+        println!("--- parts after {} ticks ---", ticks);
+        print_summary();
     }
 
     Ok(())
+}
+
+/// Compact one-line-per-part dump, for the headless runner.
+#[cfg(not(feature = "gui"))]
+fn print_summary() {
+    use part::PartType;
+
+    for (label, iter) in &mut [
+        ("static", unsafe { tim_c::static_parts_iter() }),
+        ("moving", unsafe { tim_c::moving_parts_iter() }),
+    ] {
+        for part in iter {
+            println!(
+                "  {} {:?} pos=({},{}) size=({},{}) state1={} flags1={:04x} flags2={:04x}",
+                label,
+                PartType::from_u16(part.part_type),
+                part.pos.x, part.pos.y,
+                part.size.x, part.size.y,
+                part.state1,
+                part.flags1, part.flags2,
+            );
+        }
+    }
 }
 
 pub fn load_images(on_image: &mut dyn FnMut(&str, usize, u32, u32, Vec<u8>)) -> Result<(), Box<dyn std::error::Error>> {

@@ -198,8 +198,10 @@ mod wall_common {
 
     // TIMWIN: 10d0:0e7a
     pub fn reset(part: &mut Part) {
-        let x = part.size.x as u8 - 1;
-        let y = part.size.y as u8 - 1;
+        // Border points are bytes, so the original truncated and wrapped here. Shipped levels
+        // do contain degenerate walls (L25.LEV has a 16x0 brick wall), which would underflow.
+        let x = (part.size.x as u8).wrapping_sub(1);
+        let y = (part.size.y as u8).wrapping_sub(1);
         part.set_border(&[(0, 0), (x, 0), (x, y), (0, y)]);
     }
 

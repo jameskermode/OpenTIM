@@ -6,6 +6,13 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+# The nannou renderer is optional: the pinned nannou master (2020) pulls winit 0.22,
+# which does not compile on aarch64-apple-darwin (objc BOOL is `bool` there, not `i8`).
+# Without this feature the simulation runs headless, which is enough to load and step levels.
+default = []
+gui = ["nannou"]
+
 [dependencies]
 thiserror = "1.0"
 anyhow = "1.0"
@@ -13,7 +20,7 @@ num_enum = "0.5.1"
 byteorder = "1"
 # Using latest nannou until 0.15.0 comes out.
 # 0.14.1 has the bug: https://github.com/nannou-org/nannou/issues/611
-nannou = { git = "https://github.com/nannou-org/nannou", branch = "master" }
+nannou = { git = "https://github.com/nannou-org/nannou", branch = "master", optional = true }
 
 [build-dependencies]
 cc = "1.0"
