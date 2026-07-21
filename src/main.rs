@@ -10,6 +10,7 @@ mod atmosphere;
 mod part;
 mod parts;
 mod math;
+mod render;
 #[cfg(feature = "gui")]
 mod nannou;
 pub mod tim_c;
@@ -96,7 +97,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let level_opts = level_file_format::GameOptions::Tim { freeform_mode: !from_archive };
 
         let level = level_file_format::read(&buf, &level_opts)?;
-        println!("{:?}", level);
+        if let Some(title) = &level.puzzle_title {
+            println!("{}", title);
+        }
+        if let Some(objective) = &level.puzzle_objective {
+            println!("{}", objective);
+        }
 
         unsafe {
             tim_c::initialize_llamas();
@@ -111,13 +117,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Done loading!");
     }
 
-    #[cfg(feature = "gui")]
-    nannou::start();
+    let args: Vec<String> = std::env::args().collect();
+    match args.get(3).map(|s| s.as_str()) {
+        // Open a window and simulate interactively.
+        Some("--play") => return render::run(),
 
-    #[cfg(not(feature = "gui"))]
+        // Render one frame to a PPM after N ticks, for checking the renderer headlessly.
+        Some("--screenshot") => {
+            let out = args.get(4).cloned().unwrap_or_else(|| "screenshot.ppm".into());
+            let ticks: u32 = args.get(5).and_then(|s| s.parse().ok()).unwrap_or(0);
+            let borders = args.iter().any(|a| a == "--borders");
+            return render::screenshot(&out, ticks, borders);
+        }
+
+        _ => {}
+    }
+
     {
         // Headless: step the simulation and report where the moving parts ended up.
-        let ticks: u32 = std::env::args().nth(3).and_then(|s| s.parse().ok()).unwrap_or(60);
+        let ticks: u32 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(60);
 
         println!("--- parts as loaded ---");
         print_summary();
@@ -137,7 +155,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Compact one-line-per-part dump, for the headless runner.
-#[cfg(not(feature = "gui"))]
 fn print_summary() {
     use part::PartType;
 
