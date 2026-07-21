@@ -2,3 +2,6 @@ target/
 __pycache__
 generated-structs.js
 *.wasm
+
+# Original game assets. Never commit these - the user supplies their own copy.
+game-data/

@@ -38,7 +38,11 @@ Window keys: `Space` run/pause, `B` border debug overlay, `S` screenshot, `G` gr
 
 ### CLI
 
-`argv[1]` is always the game install directory (the one holding `RESOURCE.MAP`).
+`argv[1]` is always the game install directory (the one holding `RESOURCE.MAP`). Assets are kept in the gitignored `game-data/` — `game-data/tim1` (DOS TIM 1) and `game-data/tim2` (TIM 2). Never commit anything under it.
+
+```sh
+cargo run -- game-data/tim1 L6.LEV --play
+```
 
 ```sh
 opentim <game-dir> --list-resources              # archive index
@@ -92,7 +96,7 @@ Comparing against the running original is the way to fill in missing parts and c
 - **Vanilla DOSBox** (`/Applications/dosbox.app`, 0.74) runs `TIM.EXE` fine and is a usable *behavioural* oracle (watch what a part actually does), but it has **no debugger**, so `memdumpbin` is unavailable.
 - **DOSBox-X** (`/Applications/dosbox-x.app`, installed; its arm64 binary does contain the debugger) is what `reverse-engineering/README.md` and `scripts/read-acceleration-from-segment-31.py` assume: the debugger dumps memory, `scripts/deserialize-parts.py` turns a dump into JSON, and `reverse-engineering/partScrubber.html` inspects it. That gives exact per-tick `Part` structs to diff against the headless `opentim <dir> <level> <ticks>` dump.
 
-The DOS game lives at `~/Downloads/TIM.zip` (extract, then mount the directory in DOSBox-X and run `TIM.EXE`).
+Mount `game-data/tim1` in DOSBox-X and run `TIM.EXE` to compare against the original.
 
 ### Simulation tick
 
