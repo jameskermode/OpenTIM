@@ -28,13 +28,13 @@ cargo test sine_cosine_equivalence   # single test (tests live in #[cfg(test)] m
 
 `build.rs` compiles the C half (`cc` crate) into `libtim_c`. Its `c_sources` list is explicit — a new `.c` file will be silently ignored until you add it there.
 
-### The GUI does not build on Apple Silicon
+### Rendering: `src/render.rs`, not nannou
 
-`nannou` is pinned by `Cargo.lock` to a 2020 git master commit, which pulls `winit 0.22.2` + `cocoa 0.20.2`. On `aarch64-apple-darwin`, `objc 0.2.7` defines `BOOL = bool` while winit 0.22 passes `i8`, so winit fails to compile — 7 errors, all in third-party code. `src/nannou.rs` additionally pins `BackendBit::VULKAN`, which macOS does not have.
+`src/render.rs` is a **software rasterizer** drawing into a 640x480 framebuffer, shown with `minifb`. The game is a palette-indexed 2D sprite blitter, so this matches it directly, builds in seconds, and avoids a GPU stack entirely. Sprite pixels the SCN decoder never plotted keep alpha 0, which is what `Canvas::blit` treats as transparent.
 
-So nannou is an **optional dependency behind the `gui` feature, off by default**. `cargo build` gives a working headless binary; `cargo build --features gui` reproduces the winit failure. Reviving rendering means upgrading nannou (0.19 is current) or swapping in a modern wgpu/winit stack, and dropping the Vulkan pin.
+`src/nannou.rs` is the **dead** original renderer, kept behind the `gui` feature for reference. It cannot build: `Cargo.lock` pins nannou to a 2020 git commit → `winit 0.22.2` + `cocoa 0.20.2`, and on `aarch64-apple-darwin` `objc 0.2.7` defines `BOOL = bool` while winit passes `i8`. It also pins `BackendBit::VULKAN`, which macOS lacks. `cargo build --features gui` reproduces the failure. Port anything you need out of it into `render.rs` rather than trying to revive it.
 
-Nannou window keys, for whenever the renderer works again: `Space` toggles the simulation, `B` draws part border points, `G` dumps the part/rope/belt graph to `out.gv` (graphviz).
+Window keys: `Space` run/pause, `B` border debug overlay, `S` screenshot, `G` graphviz dump to `out.gv`, `Esc` quit.
 
 ### CLI
 
@@ -44,8 +44,12 @@ Nannou window keys, for whenever the renderer works again: `Space` toggles the s
 opentim <game-dir> --list-resources              # archive index
 opentim <game-dir> --extract <NAME> <out-file>   # raw archive payload
 opentim <game-dir> --dump-images <dir> [filter]  # decode sprites to PPM
-opentim <game-dir> <level> [ticks]               # load a level, step it, dump parts
+opentim <game-dir> <level> [ticks]               # load, step, dump parts (headless)
+opentim <game-dir> <level> --play                # window, 30Hz
+opentim <game-dir> <level> --screenshot <out.ppm> [ticks] [--borders]
 ```
+
+`--screenshot` renders a frame without needing a display, which is the way to check rendering changes from a terminal. Convert with `uv run --no-project --with pillow python -c "from PIL import Image; Image.open('out.ppm').save('out.png')"`.
 
 The level argument is either a path to a saved machine on disk (parsed as **freeform**, e.g. `CATOMATC.TIM`) or the name of an entry inside the archive (parsed as a **puzzle**, e.g. `L6.LEV`), decompressed via `decoders::generic_decode` if needed.
 
@@ -85,8 +89,10 @@ In practice most `*_c!` calls you will see are **commented out**, sitting above 
 
 Comparing against the running original is the way to fill in missing parts and check fidelity, and the repo is already built for it — but note the two tiers:
 
-- **Vanilla DOSBox** (e.g. `/Applications/dosbox.app`, 0.74) runs `TIM.EXE` fine and is a fine *behavioural* oracle (watch what a part actually does), but it has **no debugger**, so `memdumpbin` is unavailable.
-- **DOSBox-X** is what `reverse-engineering/README.md` and `scripts/read-acceleration-from-segment-31.py` assume: its debugger dumps memory, `scripts/deserialize-parts.py` turns a dump into JSON, and `reverse-engineering/partScrubber.html` inspects it. That gives exact per-tick `Part` structs to diff against the headless `opentim <dir> <level> <ticks>` dump.
+- **Vanilla DOSBox** (`/Applications/dosbox.app`, 0.74) runs `TIM.EXE` fine and is a usable *behavioural* oracle (watch what a part actually does), but it has **no debugger**, so `memdumpbin` is unavailable.
+- **DOSBox-X** (`/Applications/dosbox-x.app`, installed; its arm64 binary does contain the debugger) is what `reverse-engineering/README.md` and `scripts/read-acceleration-from-segment-31.py` assume: the debugger dumps memory, `scripts/deserialize-parts.py` turns a dump into JSON, and `reverse-engineering/partScrubber.html` inspects it. That gives exact per-tick `Part` structs to diff against the headless `opentim <dir> <level> <ticks>` dump.
+
+The DOS game lives at `~/Downloads/TIM.zip` (extract, then mount the directory in DOSBox-X and run `TIM.EXE`).
 
 ### Simulation tick
 
