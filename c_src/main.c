@@ -1141,6 +1141,11 @@ static inline void check_play_bowling_ball_impact_sound(struct Part *part) {
    Renamed from stub_10a8_0328. Also ported to Rust as the private function
    angle_between_part_centers in src/tim_c.rs -- this C copy is kept because it is
    `static inline` (no external linkage) and stub_1090_0809 below, still C, keeps calling it. */
+/*
+   DUPLICATED LOGIC: if you change the arithmetic here, mirror it in the Rust copy
+   (src/tim_c.rs angle_between_part_centers). Nothing checks that the two agree --
+   they diverge silently. Delete this copy once stub_1090_0809 moves to Rust.
+*/
 static inline u16 angle_between_part_centers(struct Part *a, struct Part *b) {
     return arctan_c((a->pos.x + (a->size.x>>1)) - (b->pos.x + (b->size.x>>1)),
                     (b->pos.y + (b->size.y>>1)) - (a->pos.y + (a->size.y>>1)));

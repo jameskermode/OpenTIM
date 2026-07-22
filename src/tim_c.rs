@@ -2232,6 +2232,10 @@ pub extern "C" fn is_low_res_and_specific_part(part_type: c_int) -> c_int {
 /// this is dead code by design until that caller moves to Rust too -- `#[allow(dead_code)]`
 /// silences the resulting warning rather than that being a sign anything is wrong here.
 #[allow(dead_code)]
+/// DUPLICATED LOGIC: a copy of this still exists in `c_src/main.c`, kept because the
+/// still-C `stub_1090_0809` calls it and a `static inline` C function has no external
+/// linkage to share. If you change the arithmetic here, mirror it there -- nothing
+/// checks that the two agree. Delete the C copy once `stub_1090_0809` moves to Rust.
 fn angle_between_part_centers(a: *const Part, b: *const Part) -> u16 {
     unsafe {
         let dx = ((*a).pos.x as i32 + ((*a).size.x as i32 >> 1))
