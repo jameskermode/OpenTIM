@@ -1623,6 +1623,11 @@ pub extern "C" fn distance_to_rope_link(
 
             let links_to = (*part).links_to[rope_slot];
             let index = part_get_rope_link_index(part, links_to);
+            debug_assert!(
+                index >= 0,
+                "distance_to_rope_link: `part` is not one of `links_to`'s own links_to slots \
+                 (part_get_rope_link_index returned -1); the rope link invariant is violated"
+            );
             if (*links_to).part_type == PartType::Pulley as u16 {
                 let end = (*(*links_to).rope_data[0]).ends_pos[(1 - index) as usize];
                 rope_x_2 = end.x;
@@ -1639,6 +1644,11 @@ pub extern "C" fn distance_to_rope_link(
 
             let links_to = (*p2).links_to[rope_slot];
             let index = part_get_rope_link_index(p2, links_to);
+            debug_assert!(
+                index >= 0,
+                "distance_to_rope_link: `p2` is not one of `links_to`'s own links_to slots \
+                 (part_get_rope_link_index returned -1); the rope link invariant is violated"
+            );
             if (*links_to).part_type == PartType::Pulley as u16 {
                 let end = (*(*links_to).rope_data[0]).ends_pos[(1 - index) as usize];
                 rope_x_2 = end.x;
