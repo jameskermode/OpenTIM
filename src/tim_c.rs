@@ -691,6 +691,52 @@ pub extern "C" fn tmp_3a6a_update_vars() {
     }
 }
 
+/// TIMWIN: 1050:001e
+/// Accurate
+///
+/// Safety: `PART_3a6c` (a raw `*mut Part` global) is dereferenced unconditionally, exactly
+/// matching the C (no null check there either). Every call site sets `PART_3a6c` to a live
+/// part immediately before calling this, the same contract the C relied on.
+///
+/// Each `TMP_*_3a6c` output is `i16`; every right-hand side is computed in `i32` (mirroring
+/// C's promotion of the `i16` operands to `int` before the arithmetic) and then cast back
+/// down with `as i16`, truncating to 16 bits exactly like C's implicit narrowing on
+/// assignment to an `s16` variable. The `>> 1` on `size_something2.{x,y}` (both `i16`,
+/// promoted to `i32`) is an arithmetic (sign-extending) shift in both languages.
+/// `TMP_X_RIGHT_3a6c`/`TMP_Y_BOTTOM_3a6c` read back the just-stored, already-truncated
+/// `TMP_X_DELTA_3a6c`/`TMP_Y_DELTA_3a6c` globals (matching the C, which does the same) rather
+/// than the pre-truncation `i32` delta, and `abs()` on those never overflows `i32` since the
+/// values are always sign-extended from `i16`.
+#[no_mangle]
+pub extern "C" fn tmp_3a6c_update_vars() {
+    unsafe {
+        let part = crate::globals::PART_3a6c;
+
+        crate::globals::TMP_X2_3a6c = (*part).pos.x;
+        crate::globals::TMP_Y2_3a6c = (*part).pos.y;
+
+        crate::globals::TMP_X_CENTER_3a6c =
+            ((*part).pos.x as i32 + ((*part).size_something2.x as i32 >> 1)) as i16;
+        crate::globals::TMP_Y_CENTER_3a6c =
+            ((*part).pos.y as i32 + ((*part).size_something2.y as i32 >> 1)) as i16;
+
+        crate::globals::TMP_X_DELTA_3a6c =
+            ((*part).pos.x as i32 - (*part).pos_prev1.x as i32) as i16;
+        crate::globals::TMP_Y_DELTA_3a6c =
+            ((*part).pos.y as i32 - (*part).pos_prev1.y as i32) as i16;
+
+        crate::globals::TMP_X_LEFTMOST_3a6c = std::cmp::min((*part).pos_prev1.x, (*part).pos.x);
+        crate::globals::TMP_Y_TOPMOST_3a6c = std::cmp::min((*part).pos_prev1.y, (*part).pos.y);
+
+        crate::globals::TMP_X_RIGHT_3a6c = ((*part).pos.x as i32
+            + (*part).size.x as i32
+            + (crate::globals::TMP_X_DELTA_3a6c as i32).abs()) as i16;
+        crate::globals::TMP_Y_BOTTOM_3a6c = ((*part).pos.y as i32
+            + (*part).size.y as i32
+            + (crate::globals::TMP_Y_DELTA_3a6c as i32).abs()) as i16;
+    }
+}
+
 /// TIMWIN: 10a8:2485
 ///
 /// Safety: no `Part` is ever dereferenced here. `STATIC_PARTS_ROOT`, `MOVING_PARTS_ROOT` and

@@ -546,24 +546,7 @@ void restore_parts_state_from_design() {
     }
 }
 
-/* TIMWIN: 1050:001e
-   Accurate */
-void tmp_3a6c_update_vars() {
-    TMP_X2_3a6c = PART_3a6c->pos.x;
-    TMP_Y2_3a6c = PART_3a6c->pos.y;
-
-    TMP_X_CENTER_3a6c = PART_3a6c->pos.x + (PART_3a6c->size_something2.x>>1);
-    TMP_Y_CENTER_3a6c = PART_3a6c->pos.y + (PART_3a6c->size_something2.y>>1);
-
-    TMP_X_DELTA_3a6c = PART_3a6c->pos.x - PART_3a6c->pos_prev1.x;
-    TMP_Y_DELTA_3a6c = PART_3a6c->pos.y - PART_3a6c->pos_prev1.y;
-
-    TMP_X_LEFTMOST_3a6c = MIN(PART_3a6c->pos_prev1.x, PART_3a6c->pos.x);
-    TMP_Y_TOPMOST_3a6c = MIN(PART_3a6c->pos_prev1.y, PART_3a6c->pos.y);
-
-    TMP_X_RIGHT_3a6c = PART_3a6c->pos.x + PART_3a6c->size.x + abs(TMP_X_DELTA_3a6c);
-    TMP_Y_BOTTOM_3a6c = PART_3a6c->pos.y + PART_3a6c->size.y + abs(TMP_Y_DELTA_3a6c);
-}
+// tmp_3a6c_update_vars has moved to Rust (src/tim_c.rs).
 
 // tmp_3a6a_update_vars has moved to Rust (src/tim_c.rs).
 
