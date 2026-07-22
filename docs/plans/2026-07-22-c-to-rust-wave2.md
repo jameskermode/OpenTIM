@@ -13,6 +13,27 @@ every function moves.
 **Spec:** `docs/specs/2026-07-22-c-to-rust-port-design.md`
 **Predecessor:** `docs/plans/2026-07-22-c-to-rust-phase1-layer0.md` (complete)
 
+**Result (did not fully go to plan):** 18 functions were named and ported across Tasks 1-4
+(the allocation pair counts as one commit but two functions; the four-stub batch in Task 4
+counts as four). Measured net effect on `c_src/` (`grep -cE` function count across
+`main.c`/`part_defs.c`/`draw_rope.c`): 55 → 38, i.e. only **17** fewer function
+*definitions*, and **405** fewer lines, not the 24 functions / 501 lines the goal above
+estimated. Two reasons, both honest gaps rather than silent shortfalls:
+
+* `angle_between_part_centers` (formerly `stub_10a8_0328`) is `static inline` in C with no
+  external linkage. Its one remaining C caller, `stub_1090_0809`, is part of the
+  collision-response chain that did not move this wave, so per the porting recipe the C
+  copy had to stay (renamed to match) alongside the new private Rust port — it counts as
+  "ported" but does not reduce the C function count.
+* The seven other `static` helpers flagged in the hazard section below (`utos`, `uneg`,
+  `mul32`, `insert_part_into_root`, `calculate_border_normal_segment`,
+  `check_play_bowling_ball_impact_sound`, `move_llama2_to_beginning_of_llama1`) were
+  **never ported** — the plan's rule was to port each "at the same time as its first C
+  caller moves," but every one of their C callers (the collision-response chain,
+  `advance_parts`, `restore_parts_state_from_design`) is still C and deferred to the next
+  plan, so the trigger condition never fired. They remain pure C, unchanged, for whichever
+  plan finally moves those callers.
+
 ## What changed since wave 1
 
 The call graph re-layered when 37 functions left the C, so functions that were interior are
@@ -97,8 +118,8 @@ Port, in this order, one commit each except where noted:
 4. `next_part_or_fallback` (12 lines)
 5. `bucket_add_mass_of_contained` (5 lines)
 
-- [ ] **Step 1: Port each per the recipe, running `./scripts/verify.sh` before every commit**
-- [ ] **Step 2: For the allocation pair, additionally run the leak check**
+- [x] **Step 1: Port each per the recipe, running `./scripts/verify.sh` before every commit**
+- [x] **Step 2: For the allocation pair, additionally run the leak check**
 
 ```bash
 leaks -atExit -- ./target/debug/examples/reload game-data/tim1 L6.LEV L31.LEV L21.LEV 2>/dev/null | grep -E "leaks for|total leaked"
@@ -108,7 +129,7 @@ Expected: `0 leaks for 0 total leaked bytes`. Also run the reload example under
 `MallocScribble=1 MallocPreScribble=1` and confirm no crash — double-free and use-after-free
 are invisible to the simulation gate.
 
-- [ ] **Step 3: Confirm `./scripts/verify.sh` prints `ALL CHECKS PASSED`**
+- [x] **Step 3: Confirm `./scripts/verify.sh` prints `ALL CHECKS PASSED`**
 
 ---
 
@@ -123,8 +144,30 @@ are invisible to the simulation gate.
    holds after Task 1
 5. `calculate_rope_sag` (38 lines, `draw_rope.c`)
 
-- [ ] **Step 1: Port each per the recipe, gate green before each commit**
-- [ ] **Step 2: Report which of these the gate actually exercises, and which rest on reading**
+- [x] **Step 1: Port each per the recipe, gate green before each commit**
+- [x] **Step 2: Report which of these the gate actually exercises, and which rest on reading**
+
+  Recorded per-function in each port's doc comment (`src/tim_c.rs`):
+
+  - `all_parts_set_prev_vars` — exercised every tick with `SELECTED_PART` null (the batch
+    harness the gate drives never sets it); the `SELECTED_PART` branch itself is never hit
+    and rests on reading the C.
+  - `part_set_size_and_pos_render` — fully exercised: runs every tick for every moving part,
+    including both flip branches and the early-return path, across all 28
+    golden-baseline level/tick combinations.
+  - `update_rope_pos` — partially exercised: the `part1` non-null path, the `part2`-present
+    path and the pulley-chain loop are hit every tick for every rope in the test levels; the
+    `LEVEL_STATE != SIMULATION_MODE` block and the `!rope->part1`/`!rope->part2` early-outs
+    are never hit (the gate always ticks in `SIMULATION_MODE`) and rest on reading the C.
+  - `part_new` — exercised for the success path only (every part placed in the 28
+    golden-baseline combinations is built through it); the `part_alloc` failure path and the
+    `part_create_func` failure path are never hit (no `create_fn` currently signals failure)
+    and rest on reading the C.
+  - `calculate_rope_sag` — exercised only for the `rope_data->part1 == part` branch and the
+    `ROPETIME_CURRENT` case, since every current call site passes `time == ROPETIME_CURRENT`.
+    The `ROPETIME_PREV1`/`ROPETIME_PREV2` cases, the `part2` (`else`) branch, its early-outs,
+    and the `P_PULLEY` `nextpart` selection are not confirmed exercised and rest on reading
+    the C.
 
 ---
 
@@ -137,8 +180,22 @@ are invisible to the simulation gate.
    `bounce_c!` macro; replace that indirection with a direct Rust call
 3. `part_borders_intersect` (73 lines) — the largest in this wave, and collision-critical
 
-- [ ] **Step 1: Port each per the recipe, gate green before each commit**
-- [ ] **Step 2: For `part_borders_intersect`, state explicitly which branches the gate covers**
+- [x] **Step 1: Port each per the recipe, gate green before each commit**
+- [x] **Step 2: For `part_borders_intersect`, state explicitly which branches the gate covers**
+
+  `part_borders_intersect` covers zero of the gate's branches: coverage instrumentation
+  showed none of its 10 branches run under the 7-level x 4-tick drive at any tick count,
+  because its only caller path, Pokey the Cat's walk state machine, never activates in
+  those levels. A differential harness (`tests/differential/`) was added against a frozen
+  copy of the original C body to cover it independently (5000+ generated `Part` pairs,
+  fixed-seed PRNG; verified to actually catch divergence by deliberately inverting a
+  comparison and confirming 321/5015 cases failed, then reverting).
+
+  Also confirmed not exercised, by measurement rather than assumption: `teeter_totter_helper_2`
+  and `teeter_totter_bounce` are only reachable through a `TeeterTotter` part instance
+  (`teeter_totter_run` / the DEF's `bounce_fn`), and a tick-0 trace of all 7 gate levels
+  (`cargo run --example trace -- game-data/tim1 <LEV> 0 3`, part-type 3 = `TeeterTotter`)
+  found zero such parts in any of them, so neither function runs under the gate at all.
 
 ---
 
@@ -153,24 +210,53 @@ Ghidra is set up and the address mapping is validated — see
 `docs/reverse-engineering-setup.md` for the working headless invocation. `TIMWIN: seg:off`
 resolves directly to the same Ghidra address.
 
-- [ ] **Step 1: Read each in the C, then look it up in the original binary**
-- [ ] **Step 2: Rename only where the purpose is unambiguous**
+- [x] **Step 1: Read each in the C, then look it up in the original binary**
+- [x] **Step 2: Rename only where the purpose is unambiguous**
 
 A wrong name is worse than no name. State confidence and evidence per function; keeping
 `stub_` is a perfectly good outcome. If renaming, update every caller in both languages.
 
-- [ ] **Step 3: Port each per the recipe, gate green before each commit**
-- [ ] **Step 4: Update the reverse-engineering doc with what was and was not established**
+  Ghidra decompilation of all four addresses matched the existing C instruction-for-
+  instruction (no drift found). Three renamed with high confidence: `stub_10a8_0328` →
+  `angle_between_part_centers`, `stub_10a8_2b6d` → `queue_part_dirty_rects`,
+  `stub_10a8_280a` → `queue_dirty_rects_for_attachments`. `stub_10a8_0ab8` was **not**
+  renamed — it depends entirely on the still-unidentified `stub_10a8_0880`, and every
+  caller found in Ghidra lives in not-yet-ported UI-side code, so there was no confident
+  name to give it; kept as `stub_` per the "a wrong name is worse than no name" rule.
+
+- [x] **Step 3: Port each per the recipe, gate green before each commit**
+- [x] **Step 4: Update the reverse-engineering doc with what was and was not established**
+
+  `angle_between_part_centers` is `static inline` in C (no external linkage), so it was
+  ported as a private Rust function rather than `#[no_mangle] extern "C"`; the C copy is
+  kept (renamed to match) since the still-C `stub_1090_0809` calls it — the two copies must
+  be kept in step by hand (a follow-up commit, `ac928e5`, added a warning comment to that
+  effect after this was flagged as a latent trap). Gate coverage confirmed by temporary
+  instrumentation (reverted before the porting commit): `queue_part_dirty_rects` and
+  `queue_dirty_rects_for_attachments` run every tick for any moving part (28 calls in a
+  30-tick `L6.LEV` run); `angle_between_part_centers` runs on bounce impacts (8 calls in a
+  300-tick `L31.LEV` run); `stub_10a8_0ab8` has zero call sites anywhere and is not
+  exercised (dead code, like `calculate_intersecting_rect`).
 
 ---
 
 ### Task 5: Close out wave 2
 
-- [ ] **Step 1: Measure — lines and functions remaining, functions ported**
-- [ ] **Step 2: Update the status table in `README.md`**
-- [ ] **Step 3: Record the wave-2 outcome in the spec, including which ports the gate does
+- [x] **Step 1: Measure — lines and functions remaining, functions ported**
+
+  `cat c_src/*.c | wc -l` → 2,215 (includes the 2-line `foo.c` fixture and 1-line
+  `globals.c` placeholder, unrelated to the port, same as noted in the layer-0 outcome).
+  `grep -cE "^[a-zA-Z_][a-zA-Z0-9_ \*]*\b[a-z_0-9]+\([^;]*\)\s*\{$" c_src/main.c
+  c_src/part_defs.c c_src/draw_rope.c` → 30 / 8 / 0 = **38 functions remaining**, in
+  **2,212 lines** (1,649 + 503 + 60) across those three files. At wave 2's start
+  (commit `f891aac`) the same measurement gave 55 functions / 2,617 lines. **Wave 2 moved
+  17 functions and 405 lines.** Against the whole-port baseline (92 functions / 3,392
+  lines), **54 functions (1,180 lines) are now moved in total.**
+
+- [x] **Step 2: Update the status table in `README.md`**
+- [x] **Step 3: Record the wave-2 outcome in the spec, including which ports the gate does
       not exercise**
-- [ ] **Step 4: Run the full gate and confirm `ALL CHECKS PASSED`**
+- [x] **Step 4: Run the full gate and confirm `ALL CHECKS PASSED`**
 
 ## Remaining after this wave
 
