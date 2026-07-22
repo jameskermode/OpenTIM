@@ -184,9 +184,29 @@ if [ ! -f game-data/tim1/RESOURCE.MAP ]; then
         echo "!! game-data/tim1 missing - cannot bless baselines without it"
         exit 1
     fi
-    echo "!! game-data/tim1 missing - skipping simulation checks"
+    # game-data/tim1 (user-supplied game files) is what the 28 golden-baseline comparisons
+    # and both cross-configuration (debug/release/wasm) comparisons run against -- this
+    # project's strongest checks, and the ones most likely to catch a transliteration bug.
+    # There is no CI here, so running the gate without game-data/tim1 is the ordinary path
+    # for a contributor who hasn't supplied their own game files, which made it too easy for
+    # "ALL CHECKS PASSED" to mean almost nothing was actually checked. Fail loudly by default;
+    # only proceed with build+unit-tests-only if the skip is explicitly acknowledged.
+    if [ "$ALLOW_NO_GAME_DATA" != "1" ]; then
+        echo "  FAIL game-data/tim1 missing - the 28 golden-baseline comparisons and both"
+        echo "  debug/release/wasm cross-configuration comparisons did NOT run. This is the"
+        echo "  gate's strongest check; skipping it silently is not acceptable."
+        echo "  Set ALLOW_NO_GAME_DATA=1 to explicitly acknowledge running without it."
+        echo "CHECKS FAILED (game-data/tim1 missing)"
+        exit 1
+    fi
+    echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+    echo "!! WARNING: ALLOW_NO_GAME_DATA=1 -- game-data/tim1 missing, skipping simulation"
+    echo "!! checks: NONE of the 28 golden-baseline comparisons and NEITHER"
+    echo "!! cross-configuration (debug/release/wasm) comparison ran. Only the build and"
+    echo "!! unit tests were checked. Do not treat this as a full pass."
+    echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
     if [ "$FAIL" = "0" ]; then
-        echo "ALL CHECKS PASSED (build and unit tests only)"
+        echo "ALL CHECKS PASSED (build and unit tests only -- simulation checks SKIPPED)"
         exit 0
     else
         echo "CHECKS FAILED (unit tests failed; build and unit tests only)"
