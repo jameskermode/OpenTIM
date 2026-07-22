@@ -45,6 +45,30 @@ if [ "$BLESS" = "1" ]; then
     echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 fi
 
+echo "== C compiler diagnostics (implicit declarations / incompatible pointer types) =="
+# These two warning classes indicate real C type errors that cc-rs happily compiles
+# anyway (they don't fail `cargo build`), so a normal build can pass with broken C:
+#   -Wimplicit-function-declaration : a call with no visible prototype -- C assumes the
+#       function returns `int`, which silently truncates a returned pointer on a 64-bit
+#       target.
+#   -Wincompatible-pointer-types    : e.g. a struct tag first named inside a function
+#       prototype gets function-prototype scope, making it a distinct incomplete type from
+#       the real file-scope struct of the same name -- callers passing the real struct
+#       pointer then get this warning instead of a clean compile.
+# Both are otherwise easy to miss (the binary still links and often still runs), so check
+# for them explicitly here rather than relying on someone reading `cargo build` warnings.
+# Compiled directly with the system compiler (not through cargo/cc-rs) so this check does
+# not depend on incremental build caching -- it always re-parses every C file.
+C_SOURCES="c_src/foo.c c_src/globals.c c_src/main.c c_src/part_defs.c c_src/draw_rope.c"
+C_DIAG="$VERIFY_TMP/c_diagnostics.txt"
+cc -Wall -Wextra -fsyntax-only $C_SOURCES > "$C_DIAG" 2>&1 || true
+C_BAD_DIAGS="$(grep -E '\[-W(implicit-function-declaration|incompatible-pointer-types)\]' "$C_DIAG" || true)"
+if [ -n "$C_BAD_DIAGS" ]; then
+    echo "  FAIL C compiler emitted implicit-function-declaration or incompatible-pointer-types warnings:"
+    echo "$C_BAD_DIAGS" | sed 's/^/    /'
+    FAIL=1
+fi
+
 echo "== build =="
 cargo build --quiet
 cargo build --quiet --release

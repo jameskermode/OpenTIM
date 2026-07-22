@@ -85,6 +85,11 @@ enum GetPartsFlags {
     CHOOSE_STATIC_OR_ELSE_MOVING_PART=0x3000
 };
 
+struct Line; // forward declaration: struct Line itself is defined below, after this block of
+             // prototypes -- without this, the "struct Line" mentioned in
+             // four_points_adjust_p1_by_one's prototype below would get function-prototype
+             // scope, making it a distinct incomplete type from the real file-scope struct.
+
 struct Part* next_part_or_fallback(struct Part *part, int choice);
 
 // Defined in Rust (src/tim_c.rs).
