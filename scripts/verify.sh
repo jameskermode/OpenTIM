@@ -23,6 +23,7 @@ if [ "$1" = "--bless" ]; then
 fi
 
 LEVELS="L6 L20 L21 L24 L25 L31 L79"
+BASELINE_HASHES="tests/baselines.sha256"
 TICKS="0 30 120 300"
 FAIL=0
 
@@ -252,17 +253,21 @@ process.stdout.write(g.parts_summary());
 EOF
 
 if [ "$BLESS" = "1" ]; then
-    echo "== blessing tests/baselines/ from release build =="
+    echo "== blessing baselines from release build =="
     mkdir -p tests/baselines
+    : > "$BASELINE_HASHES.tmp"
     for lev in $LEVELS; do
       for t in $TICKS; do
         base="tests/baselines/$lev.LEV.$t.txt"
         ./target/release/opentim game-data/tim1 "$lev.LEV" "$t" 2>/dev/null | sed -n '/after/,$p' | tail -n +2 > "$base"
         if [ ! -s "$base" ]; then echo "  FAIL $lev@$t produced no output while blessing"; FAIL=1; fi
+        printf '%s  %s\n' "$(shasum -a 256 < "$base" | cut -d" " -f1)" "$lev.LEV.$t" >> "$BASELINE_HASHES.tmp"
       done
     done
-    if [ "$FAIL" != "0" ]; then echo "BLESS FAILED"; exit 1; fi
-    echo "   wrote $(ls tests/baselines | wc -l | tr -d ' ') baseline files"
+    if [ "$FAIL" != "0" ]; then rm -f "$BASELINE_HASHES.tmp"; echo "BLESS FAILED"; exit 1; fi
+    sort -k2 "$BASELINE_HASHES.tmp" > "$BASELINE_HASHES"; rm -f "$BASELINE_HASHES.tmp"
+    echo "   wrote $(ls tests/baselines | wc -l | tr -d ' ') local baseline files (gitignored)"
+    echo "   wrote $BASELINE_HASHES ($(wc -l < "$BASELINE_HASHES" | tr -d ' ') hashes, committed)"
 fi
 
 echo "== simulation: baseline == debug == release == wasm =="
@@ -273,11 +278,25 @@ for lev in $LEVELS; do
     ./target/release/opentim game-data/tim1 "$lev.LEV" "$t" 2>/dev/null | sed -n '/after/,$p' | tail -n +2 > "$VERIFY_TMP/v_rel.txt"
     if [ ! -s "$VERIFY_TMP/v_dbg.txt" ]; then echo "  FAIL $lev@$t produced no output"; FAIL=1; continue; fi
     if [ ! -s "$VERIFY_TMP/v_rel.txt" ]; then echo "  FAIL $lev@$t release produced no output"; FAIL=1; continue; fi
-    if [ ! -f "$base" ]; then
-      echo "  FAIL $lev@$t no baseline at $base (run ./scripts/verify.sh --bless to create it deliberately)"
+    # The committed anchor is a hash, not the dump: a dump lists every part and its exact
+    # position, which is a transcription of the game's level design and must not live in
+    # this repository. The local dump under tests/baselines/ is gitignored and exists only
+    # so a developer can diff and see WHAT changed.
+    want=$(grep " $lev.LEV.$t\$" "$BASELINE_HASHES" 2>/dev/null | cut -d" " -f1)
+    got=$(shasum -a 256 < "$VERIFY_TMP/v_rel.txt" | cut -d" " -f1)
+    if [ -z "$want" ]; then
+      echo "  FAIL $lev@$t no baseline hash for $lev.LEV.$t in $BASELINE_HASHES (run --bless deliberately)"
       FAIL=1
-    elif ! diff -q "$base" "$VERIFY_TMP/v_rel.txt" >/dev/null; then
-      echo "  FAIL $lev@$t release != baseline $base"; diff "$base" "$VERIFY_TMP/v_rel.txt" | head -4; FAIL=1
+    elif [ "$want" != "$got" ]; then
+      echo "  FAIL $lev@$t release does not match committed baseline hash"
+      echo "        expected $want"
+      echo "        got      $got"
+      if [ -f "$base" ]; then
+        echo "        diff against your local baseline:"; diff "$base" "$VERIFY_TMP/v_rel.txt" | head -6
+      else
+        echo "        (no local dump at $base to diff; run --bless on a known-good commit to create one)"
+      fi
+      FAIL=1
     fi
     if ! diff -q "$VERIFY_TMP/v_dbg.txt" "$VERIFY_TMP/v_rel.txt" >/dev/null; then
       echo "  FAIL $lev@$t debug != release"; diff "$VERIFY_TMP/v_dbg.txt" "$VERIFY_TMP/v_rel.txt" | head -4; FAIL=1

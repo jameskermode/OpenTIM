@@ -13,3 +13,7 @@ web/pkg/
 
 # subagent-driven-development scratch
 .superpowers/
+
+# Baseline dumps list every part and its position, which transcribes the game level
+# designs. Only the hashes (tests/baselines.sha256) are committed.
+tests/baselines/
