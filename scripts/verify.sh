@@ -125,6 +125,7 @@ for lev in $LEVELS; do
     ./target/debug/opentim   game-data/tim1 "$lev.LEV" "$t" 2>/dev/null | sed -n '/after/,$p' | tail -n +2 > "$VERIFY_TMP/v_dbg.txt"
     ./target/release/opentim game-data/tim1 "$lev.LEV" "$t" 2>/dev/null | sed -n '/after/,$p' | tail -n +2 > "$VERIFY_TMP/v_rel.txt"
     if [ ! -s "$VERIFY_TMP/v_dbg.txt" ]; then echo "  FAIL $lev@$t produced no output"; FAIL=1; continue; fi
+    if [ ! -s "$VERIFY_TMP/v_rel.txt" ]; then echo "  FAIL $lev@$t release produced no output"; FAIL=1; continue; fi
     if [ ! -f "$base" ]; then
       echo "  FAIL $lev@$t no baseline at $base (run ./scripts/verify.sh --bless to create it deliberately)"
       FAIL=1
@@ -156,7 +157,9 @@ fi
 if [ "$RELOAD_OK" = "1" ]; then
   grep "^  " "$VERIFY_TMP/v_fresh_raw.txt" > "$VERIFY_TMP/v_fresh.txt" || true
   grep "^  " "$VERIFY_TMP/v_reload_raw.txt" > "$VERIFY_TMP/v_reload.txt" || true
-  if ! diff -q "$VERIFY_TMP/v_fresh.txt" "$VERIFY_TMP/v_reload.txt" >/dev/null; then
+  if [ ! -s "$VERIFY_TMP/v_fresh.txt" ] || [ ! -s "$VERIFY_TMP/v_reload.txt" ]; then
+    echo "  FAIL reload check produced no parsable output"; FAIL=1
+  elif ! diff -q "$VERIFY_TMP/v_fresh.txt" "$VERIFY_TMP/v_reload.txt" >/dev/null; then
     echo "  FAIL reloaded world differs from fresh"; diff "$VERIFY_TMP/v_fresh.txt" "$VERIFY_TMP/v_reload.txt" | head -4; FAIL=1
   fi
 fi
