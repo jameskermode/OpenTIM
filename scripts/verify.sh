@@ -95,7 +95,8 @@ TIMWIN_SOURCES="src/tim_c.rs src/parts/mod.rs src/wasm_libc.rs"
 # task that added this check); it must only grow for the same reason -- a NEW omission
 # should fail, not get silently added here.
 #
-# part_alloc_borders/part_free_borders/part_init_rope_data_primary joined this list for
+# part_alloc_borders/part_free_borders/part_init_rope_data_primary/part_init_belt_data
+# joined this list for
 # exactly that reason, not as a new exception to it: like their neighbours
 # belt_data_alloc/rope_data_alloc, the C source they were transliterated from never carried a
 # TIMWIN tag either, and Ghidra decompilation of the per-part-type reset functions that call
