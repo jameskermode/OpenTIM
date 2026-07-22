@@ -394,7 +394,10 @@ mod teeter_totter {
         part.set_border(borders[i]);
     }
 
-    // export to C
+    /// TIMWIN: 10d0:0114
+    ///
+    /// Exported so the still-C `teeter_totter_run` can call back into the reset logic above
+    /// through the part vtable; the logic (and its TIMWIN address) is the same as `reset`.
     #[no_mangle]
     pub extern "C" fn teeter_totter_reset(part: &mut Part) {
         reset(part);

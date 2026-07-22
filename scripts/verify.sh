@@ -72,7 +72,7 @@ if [ -n "$C_BAD_DIAGS" ]; then
     FAIL=1
 fi
 
-echo "== TIMWIN provenance tags on ported functions (src/tim_c.rs) =="
+echo "== TIMWIN provenance tags on ported functions (src/tim_c.rs, src/parts/mod.rs, src/wasm_libc.rs) =="
 # Every ported function carries a `TIMWIN: segment:offset` doc-comment tag -- the ONLY
 # cross-reference from the Rust back to the original disassembled binary. Losing that tag
 # loses the function's provenance. This has happened silently twice: a new function's doc
@@ -81,9 +81,16 @@ echo "== TIMWIN provenance tags on ported functions (src/tim_c.rs) =="
 # the first with no doc comment and no tag at all. This check catches that (and any other
 # untagged export) mechanically instead of relying on someone noticing during review.
 #
+# Ported code is not confined to src/tim_c.rs -- e.g. src/parts/mod.rs already holds several
+# ported functions, and more files will gain them as the port continues -- so every Rust
+# source that has ever exported a `#[no_mangle] pub extern "C" fn` is listed explicitly here.
+# When porting introduces a new module with such exports, add it to this list; an unlisted
+# file with untagged exports would defeat the whole check.
+TIMWIN_SOURCES="src/tim_c.rs src/parts/mod.rs src/wasm_libc.rs"
+#
 # A handful of exported functions are project infrastructure rather than ports of original
 # TIM code, so they legitimately have no TIMWIN tag. That set was established by manually
-# auditing every `#[no_mangle] pub extern "C" fn` in src/tim_c.rs as of 2026-07-22 (see the
+# auditing every `#[no_mangle] pub extern "C" fn` in TIMWIN_SOURCES as of 2026-07-22 (see the
 # task that added this check); it must only grow for the same reason -- a NEW omission
 # should fail, not get silently added here.
 TIMWIN_ALLOWLIST="unimplemented output_c output_part_c output_int_c arctan_c sine_c \
@@ -92,7 +99,7 @@ belt_data_alloc rope_data_alloc debug_part_size part_image_size part_density par
 part_bounciness part_friction part_order part_data30_flags1 part_data30_flags3 \
 part_data30_size_something2 part_data30_size part_data31_render_pos_offset \
 part_explicit_size part_run part_reset part_bounce part_flip part_resize part_rope \
-part_create_func"
+part_create_func abs"
 
 TIMWIN_MISSING="$(awk -v allow="$TIMWIN_ALLOWLIST" '
 BEGIN {
@@ -102,6 +109,12 @@ BEGIN {
         gsub(/^[ \t]+|[ \t]+$/, "", name)
         if (name != "") allowed[name] = 1
     }
+    doc_tag = 0
+    pending = 0
+}
+FNR == 1 {
+    # Reset per-file: a dangling #[no_mangle] or open doc block at the end of one file must
+    # never be carried over and matched against the first lines of the next file.
     doc_tag = 0
     pending = 0
 }
@@ -138,10 +151,10 @@ BEGIN {
     doc_tag = 0
     pending = 0
 }
-' src/tim_c.rs)"
+' $TIMWIN_SOURCES)"
 
 if [ -n "$TIMWIN_MISSING" ]; then
-    echo "  FAIL these exported functions in src/tim_c.rs have no TIMWIN: tag in the doc"
+    echo "  FAIL these exported functions have no TIMWIN: tag in the doc"
     echo "  comment immediately above them, and are not in the allowlist:"
     echo "$TIMWIN_MISSING" | sed 's/^/    /'
     FAIL=1
