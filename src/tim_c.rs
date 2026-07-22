@@ -659,6 +659,34 @@ pub extern "C" fn bucket_add_mass(bucket: *mut Part, part: *mut Part) {
     }
 }
 
+/// TIMWIN: 1090:158b
+/// Accurate
+///
+/// Safety: `bucket` is dereferenced unconditionally, exactly matching the C (no null check
+/// there either) -- every call site passes a currently-processed, live part (e.g. `part` /
+/// `PART_3a6c` while `part->bounce_part` / `PART_3a6a` are known non-null). The
+/// `EACH_INTERACION` walk only dereferences `curpart` after checking it against null in the
+/// loop condition (mirroring the C macro's `varname != 0` loop test), so every node visited
+/// is guaranteed live. `contains` is only ever compared by pointer value, never
+/// dereferenced, so it may safely be null.
+#[no_mangle]
+pub extern "C" fn bucket_contains(bucket: *mut Part, contains: *mut Part) -> bool {
+    unsafe {
+        if (*bucket).part_type != PartType::Bucket as u16 {
+            return false;
+        }
+
+        let mut curpart = (*bucket).interactions;
+        while !curpart.is_null() {
+            if curpart == contains {
+                return true;
+            }
+            curpart = (*curpart).interactions;
+        }
+        false
+    }
+}
+
 /// TIMWIN: 1020:02ba
 #[repr(C)]
 pub struct GDIRect {

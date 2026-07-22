@@ -950,18 +950,7 @@ bool part_collides_with_playfield_part(const struct Part *part) {
     return 0;
 }
 
-/* TIMWIN: 1090:158b
-   Accurate */
-bool bucket_contains(struct Part *bucket, struct Part *contains) {
-    if (bucket->type != P_BUCKET) return 0;
-
-    EACH_INTERACION(bucket, curpart) {
-        if (curpart == contains) {
-            return 1;
-        }
-    }
-    return 0;
-}
+// bucket_contains has moved to Rust (src/tim_c.rs).
 
 /* TIMWIN: 1050:08fe
    Very similar to stub_1050_0550.
