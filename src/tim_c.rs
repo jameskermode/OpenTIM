@@ -1229,6 +1229,46 @@ pub extern "C" fn part_explicit_size(part_type: c_int, index: u16, out: &mut Sho
     }
 }
 
+/// TIMWIN: 10a8:25d9
+///
+/// Safety: `part` is dereferenced unconditionally, matching the C (no null check there
+/// either); every caller passes a live, already-`part_alloc`'d `Part`.
+///
+/// `part->state1` (`i16`) is passed as the `u16 index` parameter to `part_explicit_size`/
+/// `part_image_size` via `as u16`, matching C's implicit conversion of a signed value to an
+/// unsigned parameter of the same width at the call site: it reinterprets the same bit
+/// pattern, with no promotion/truncation concerns since both are 16 bits wide.
+#[no_mangle]
+pub extern "C" fn part_set_size(part: *mut Part) {
+    unsafe {
+        if (*part).part_type == PartType::Belt as u16 || (*part).part_type == PartType::Rope as u16 {
+            (*part).size.x = 0;
+            (*part).size.y = 0;
+            return;
+        }
+
+        if (*part).flags1 & 0x0040 != 0 {
+            (*part).size = (*part).size_something2;
+            return;
+        }
+
+        let mut size = ShortVec { x: 0, y: 0 };
+
+        if part_explicit_size((*part).part_type as c_int, (*part).state1 as u16, &mut size) != 0 {
+            (*part).size = size;
+            return;
+        }
+
+        if part_image_size((*part).part_type as c_int, (*part).state1 as u16, &mut size as *mut ShortVec) != 0 {
+            (*part).size = size;
+            return;
+        }
+
+        (*part).size.x = 0;
+        (*part).size.y = 0;
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn part_run(part: &mut Part) {
     let t = PartType::from_u16(part.part_type as u16);

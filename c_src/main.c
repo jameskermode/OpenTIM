@@ -123,9 +123,7 @@ void part_calculate_border_normals(struct Part *part) {
     calculate_border_normal_segment(part->borders_data + part->num_borders-1, part->borders_data);
 }
 
-void part_set_size(struct Part *part);
-
-// get_first_part has moved to Rust (src/tim_c.rs).
+// get_first_part and part_set_size have moved to Rust (src/tim_c.rs).
 
 /* TIMWIN: 10a8:24d8 */
 struct Part* next_part_or_fallback(struct Part *part, int choice) {
@@ -230,34 +228,7 @@ static inline void move_llama2_to_beginning_of_llama1() {
     LLAMA_2 = 0;
 }
 
-/* TIMWIN: 10a8:25d9 */
-void part_set_size(struct Part *part) {
-    if (part->type == P_BELT || part->type == P_ROPE) {
-        part->size.x = 0;
-        part->size.y = 0;
-        return;
-    }
-
-    if (ANY_FLAGS(part->flags1, F1_0040)) {
-        part->size = part->size_something2;
-        return;
-    }
-
-    struct ShortVec size;
-
-    if (part_explicit_size(part->type, part->state1, &size)) {
-        part->size = size;
-        return;
-    }
-
-    if (part_image_size(part->type, part->state1, &size)) {
-        part->size = size;
-        return;
-    }
-
-    part->size.x = 0;
-    part->size.y = 0;
-}
+// part_set_size has moved to Rust (src/tim_c.rs).
 
 /* TIMWIN: 10a8:252b */
 void part_set_size_and_pos_render(struct Part *part) {
