@@ -406,10 +406,7 @@ u16 quadrant_from_angle(u16 angle) {
     return ((angle + 0x2000) >> 14) & 3;
 }
 
-/* TIMWIN: 1050:01e7 */
-u16 part_get_movement_delta_angle(struct Part *part) {
-    return arctan_c(part->pos_prev1.x - part->pos.x, part->pos.y - part->pos_prev1.y);
-}
+// part_get_movement_delta_angle has moved to Rust (src/tim_c.rs).
 
 /* TIMWIN: 10a8:176f
   Accurate */
