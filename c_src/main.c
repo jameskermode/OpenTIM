@@ -1871,36 +1871,6 @@ void stub_10a8_280a(struct Part *part, int c) {
     }
 }
 
-/* TIMWIN: 1040:197d */
-bool is_low_res_and_specific_part(enum PartType type) {
-    if (VALUES_PER_PIXEL > 256) return 0;
-
-    // I'm not really sure what's so special about these parts.
-    switch (type) {
-        case P_BRICK_WALL:
-        case P_INCLINE:
-        case P_MORT_THE_MOUSE_CAGE:
-        case P_CONVEYOR:
-        case P_PULLEY:
-        case P_LIGHT_SWITCH_OUTLET:
-        case P_EYE_HOOK:
-        case P_FAN:
-        case P_MAGNIFYING_GLASS:
-        case P_SOLAR_PANELS:
-        case P_PIPE_STRAIGHT:
-        case P_PIPE_CURVED:
-        case P_WOOD_WALL:
-        case P_ELECTRIC_ENGINE:
-        case P_NAIL:
-        case P_DIRT_WALL:
-        case P_PINBALL_BUMPER:
-            return 1;
-
-        default:
-            return 0;
-    }
-}
-
 /* TIMWIN: 10a8:2b6d */
 void stub_10a8_2b6d(struct Part *part, int c) {
     if (SQUIRREL != 0) return;

@@ -108,6 +108,7 @@ bool bucket_contains(struct Part *bucket, struct Part *contains);
 void tmp_3a6a_update_vars(void);
 void four_points_adjust_p1_by_one(struct Line *points);
 bool should_parts_skip_collision(enum PartType a, enum PartType b);
+bool is_low_res_and_specific_part(enum PartType type);
 void part_clamp_to_terminal_velocity(struct Part *part);
 void tmp_3a6c_update_vars(void);
 void initialize_llamas(void);

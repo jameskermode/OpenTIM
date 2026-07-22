@@ -1339,3 +1339,38 @@ pub extern "C" fn part_create_func(part_type: c_int, part: &mut Part) -> c_int {
 
     0
 }
+
+/// TIMWIN: 1040:197d
+///
+/// Safety: no pointer is ever touched here. `part_type` is a bare `enum PartType` value
+/// passed by value (a bare C enum here is a 4-byte value, not a pointer), matching the C
+/// signature exactly, so there is no null path to preserve.
+#[no_mangle]
+pub extern "C" fn is_low_res_and_specific_part(part_type: c_int) -> bool {
+    if unsafe { crate::globals::VALUES_PER_PIXEL } > 256 {
+        return false;
+    }
+
+    // I'm not really sure what's so special about these parts.
+    match PartType::from_u16(part_type as u16) {
+        PartType::BrickWall
+        | PartType::Incline
+        | PartType::MortTheMouseCage
+        | PartType::Conveyor
+        | PartType::Pulley
+        | PartType::LightSwitchOutlet
+        | PartType::EyeHook
+        | PartType::Fan
+        | PartType::MagnifyingGlass
+        | PartType::SolarPanels
+        | PartType::PipeStraight
+        | PartType::PipeCurved
+        | PartType::WoodWall
+        | PartType::ElectricEngine
+        | PartType::Nail
+        | PartType::DirtWall
+        | PartType::PinballBumper => true,
+
+        _ => false,
+    }
+}
