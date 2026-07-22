@@ -588,19 +588,6 @@ pub extern "C" fn arctan_c(dx: i32, dy: i32) -> u16 {
     math::arctan(dx, dy)
 }
 
-/// TIMWIN: 1050:01e7
-///
-/// Safety: `part` is dereferenced unconditionally, exactly matching the C (`part->pos_prev1`
-/// / `part->pos` with no null check there either). Every call site passes a part that is
-/// currently being processed by the simulation (either the loop variable from
-/// `EACH_STATIC_THEN_MOVING_PART`, or the `PART_3a6c` global while it points at the part
-/// under consideration), so it is guaranteed non-null and pointing at a live `Part`; there is
-/// no null path to preserve because the C had none either.
-///
-/// The subtractions mirror C's integer promotion: `part->pos_prev1.x - part->pos.x` promotes
-/// both `i16` operands to (32-bit) `int` before subtracting, so the result cannot overflow
-/// and no truncation happens before it reaches `arctan_c`'s `i32` parameters. Casting to
-/// `i32` before subtracting reproduces that exactly.
 /// TIMWIN: 1050:0221
 /// Returns 0 to 3.
 /// Accurate
@@ -626,6 +613,19 @@ pub extern "C" fn quadrant_from_angle(angle: u16) -> u16 {
     (angle.wrapping_add(0x2000) >> 14) & 3
 }
 
+/// TIMWIN: 1050:01e7
+///
+/// Safety: `part` is dereferenced unconditionally, exactly matching the C (`part->pos_prev1`
+/// / `part->pos` with no null check there either). Every call site passes a part that is
+/// currently being processed by the simulation (either the loop variable from
+/// `EACH_STATIC_THEN_MOVING_PART`, or the `PART_3a6c` global while it points at the part
+/// under consideration), so it is guaranteed non-null and pointing at a live `Part`; there is
+/// no null path to preserve because the C had none either.
+///
+/// The subtractions mirror C's integer promotion: `part->pos_prev1.x - part->pos.x` promotes
+/// both `i16` operands to (32-bit) `int` before subtracting, so the result cannot overflow
+/// and no truncation happens before it reaches `arctan_c`'s `i32` parameters. Casting to
+/// `i32` before subtracting reproduces that exactly.
 #[no_mangle]
 pub extern "C" fn part_get_movement_delta_angle(part: *mut Part) -> u16 {
     unsafe {
