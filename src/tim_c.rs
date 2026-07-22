@@ -7,7 +7,6 @@ use crate::parts;
 
 /**** Import C declarations to Rust ****/
 extern {
-    pub fn part_new(part_type: c_int) -> *mut Part;
     pub fn part_calculate_border_normals(part: *mut Part);
     pub fn restore_parts_state_from_design();
     pub fn advance_parts();
@@ -103,6 +102,78 @@ pub extern "C" fn part_free(part: *mut Part) {
 
         let layout = std::alloc::Layout::new::<Part>();
         std::alloc::dealloc(part as *mut u8, layout);
+    }
+}
+
+/// TIMWIN: 1078:00f2
+///
+/// Safety: `part_alloc`'s result is null-checked before any dereference (matching the C's
+/// `if (!part) goto error;`), and the error path calls `part_free(part)` on whatever `part`
+/// currently holds -- null in the allocation-failure case (a documented no-op, see
+/// `part_free` above) or a partially-initialized-but-live `Part` if `part_create_func` fails
+/// after allocation succeeded, exactly matching the C's single shared `error:` label. Every
+/// other dereference of `part` is unconditional, matching the C (no null check anywhere else
+/// in the original).
+///
+/// Allocator pairing: `part` itself comes from `part_alloc` (Rust `alloc_zeroed`) and, on
+/// either error path, is released via `part_free` (Rust `dealloc`) -- the same pair used
+/// before this port and unchanged by it. `part_create_func` (already Rust) may itself
+/// populate `borders_data`/`belt_data`/`rope_data[0]` via `part_alloc_borders`/
+/// `part_init_belt_data`/`part_init_rope_data_primary` before failing; `part_free` already
+/// knows how to release each of those (libc `free` for `borders_data`, `dealloc` for
+/// `belt_data`/`rope_data[0]`, per its own doc comment above), so no new allocator mismatch
+/// is introduced here -- `part_new` never allocates anything itself beyond the single
+/// `part_alloc` call.
+///
+/// `type` (`enum PartType`, here `c_int`) is truncated to `u16` on assignment to
+/// `part->type`, matching C's implicit `int -> u16` narrowing (values are always valid
+/// `PartType` variants in practice, well within 16 bits, so this never actually truncates
+/// meaningfully, but the cast reproduces the same narrowing conversion the C performs).
+/// `res == 1` is compared against `part_create_func`'s `c_int` return exactly as the C does;
+/// `part_create_func`'s current Rust implementation always returns `0`, so this branch is
+/// unreachable in practice today (same as it was when this function was C, since nothing
+/// has changed about `part_create_func`), but the check is preserved verbatim in case a
+/// future `create_fn` starts signalling failure.
+///
+/// Gate-exercised: yes for the success path (every part placed in any of the 28
+/// golden-baseline level/tick combinations is built via `part_new`, e.g. through level
+/// loading and the `P_ROPE_SEVERED_END` spawn in `c_src/part_defs.c`). The `part_alloc`
+/// failure path and the `part_create_func` failure path are never hit by the gate (the
+/// former needs real allocator exhaustion; the latter needs a `create_fn` that returns
+/// non-zero, which none currently do) -- both rest on reading the C.
+#[no_mangle]
+pub extern "C" fn part_new(part_type: c_int) -> *mut Part {
+    unsafe {
+        let part = part_alloc();
+        if part.is_null() {
+            part_free(part);
+            return std::ptr::null_mut();
+        }
+
+        (*part).part_type = part_type as u16;
+        (*part).flags1 = part_data30_flags1(part_type);
+        (*part).flags3 = part_data30_flags3(part_type);
+        (*part).size_something2 = part_data30_size_something2(part_type);
+        (*part).size = part_data30_size(part_type);
+
+        // Note: The original game would assign a set number of borders for the part here.
+        // OpenTIM sets it later.
+        (*part).num_borders = 0;
+
+        (*part).original_pos_x = -1;
+        (*part).original_pos_y = -1;
+
+        let res = part_create_func(part_type, &mut *part);
+        if res == 1 {
+            part_free(part);
+            return std::ptr::null_mut();
+        }
+
+        (*part).original_flags2 = (*part).flags2;
+        part_set_size(part);
+        (*part).size_something = (*part).size;
+
+        part
     }
 }
 

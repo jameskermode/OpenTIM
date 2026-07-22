@@ -91,6 +91,7 @@ struct Line; // forward declaration: struct Line itself is defined below, after 
              // scope, making it a distinct incomplete type from the real file-scope struct.
 
 // Defined in Rust (src/tim_c.rs).
+struct Part* part_new(enum PartType type);
 struct Part* part_alloc();
 void part_free(struct Part *part);
 void part_free_borders(struct Part *part);

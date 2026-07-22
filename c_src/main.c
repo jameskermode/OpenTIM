@@ -136,41 +136,7 @@ void part_calculate_border_normals(struct Part *part) {
 
 // part_init_rope_data_primary and part_init_belt_data have moved to Rust (src/tim_c.rs).
 
-/* TIMWIN: 1078:00f2 */
-struct Part* part_new(enum PartType type) {
-    struct Part *part = part_alloc();
-    if (!part) {
-        goto error;
-    }
-
-    part->type = type;
-    part->flags1 = part_data30_flags1(type);
-    part->flags3 = part_data30_flags3(type);
-    part->size_something2 = part_data30_size_something2(type);
-    part->size = part_data30_size(type);
-
-    // Note: The original game would assign a set number of borders for the part here.
-    // OpenTIM sets it later.
-    part->num_borders = 0;
-
-    part->original_pos_x = -1;
-    part->original_pos_y = -1;
-
-    int res = part_create_func(type, part);
-    if (res == 1) {
-        goto error;
-    }
-
-    part->original_flags2 = part->flags2;
-    part_set_size(part);
-    part->size_something = part->size;
-
-    return part;
-
-error:
-    part_free(part);
-    return 0;
-}
+// part_new has moved to Rust (src/tim_c.rs).
 
 // debug_part_size and remove_part_from_linked_list have moved to Rust (src/tim_c.rs).
 
