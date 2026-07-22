@@ -1161,27 +1161,32 @@ pub extern "C" fn next_part_or_fallback(part: *mut Part, choice: c_int) -> *mut 
 /// Safety: no pointer is ever touched here. `a` and `b` are plain `enum PartType` values
 /// passed by value (a bare C enum here is a 4-byte value, not a pointer), matching the C
 /// signature exactly, so there is no null path to preserve.
+///
+/// Returns c_int (0/1), not a genuine bool -- this codebase's `bool` is `typedef int bool`
+/// (c_src/int.h), so returning Rust's native 1-byte `bool` here was ABI-compatible only by
+/// chance (the C caller tests all 32 bits for truthiness). See the matching C prototype
+/// comment in c_src/tim.h.
 #[no_mangle]
-pub extern "C" fn should_parts_skip_collision(a: c_int, b: c_int) -> bool {
+pub extern "C" fn should_parts_skip_collision(a: c_int, b: c_int) -> c_int {
     // Checks if the two part types are a set of any two specific parts, regardless of order.
     let a = PartType::from_u16(a as u16);
     let b = PartType::from_u16(b as u16);
     let chk = |x: PartType, y: PartType| (a == x && b == y) || (b == x && a == y);
 
     if chk(PartType::PokeyTheCat, PartType::MortTheMouse) {
-        return true;
+        return 1;
     }
     if chk(PartType::MortTheMouse, PartType::Cheese) {
-        return true;
+        return 1;
     }
     if chk(PartType::MelSchlemming, PartType::MelsHouse) {
-        return true;
+        return 1;
     }
     if chk(PartType::MelSchlemming, PartType::MelSchlemming) {
-        return true;
+        return 1;
     }
 
-    false
+    0
 }
 
 /// TIMWIN: 1090:158b
@@ -1194,21 +1199,26 @@ pub extern "C" fn should_parts_skip_collision(a: c_int, b: c_int) -> bool {
 /// loop condition (mirroring the C macro's `varname != 0` loop test), so every node visited
 /// is guaranteed live. `contains` is only ever compared by pointer value, never
 /// dereferenced, so it may safely be null.
+///
+/// Returns c_int (0/1), not a genuine bool -- this codebase's `bool` is `typedef int bool`
+/// (c_src/int.h), so returning Rust's native 1-byte `bool` here was ABI-compatible only by
+/// chance (the C caller tests all 32 bits for truthiness). See the matching C prototype
+/// comment in c_src/tim.h.
 #[no_mangle]
-pub extern "C" fn bucket_contains(bucket: *mut Part, contains: *mut Part) -> bool {
+pub extern "C" fn bucket_contains(bucket: *mut Part, contains: *mut Part) -> c_int {
     unsafe {
         if (*bucket).part_type != PartType::Bucket as u16 {
-            return false;
+            return 0;
         }
 
         let mut curpart = (*bucket).interactions;
         while !curpart.is_null() {
             if curpart == contains {
-                return true;
+                return 1;
             }
             curpart = (*curpart).interactions;
         }
-        false
+        0
     }
 }
 
@@ -1228,19 +1238,24 @@ pub struct GDIRect {
 /// codebase (it was dead in the C too), so there is no concrete call site to point to, but
 /// the contract carried over verbatim from C is that all three point at live `GDIRect`s
 /// (typically caller-owned stack locals), never null.
+///
+/// Returns c_int (0/1), not a genuine bool -- this codebase's `bool` is `typedef int bool`
+/// (c_src/int.h), so returning Rust's native 1-byte `bool` here was ABI-compatible only by
+/// chance (the C caller tests all 32 bits for truthiness). See the matching C prototype
+/// comment in c_src/tim.h.
 #[no_mangle]
 pub extern "C" fn calculate_intersecting_rect(
     out: *mut GDIRect,
     a: *const GDIRect,
     b: *const GDIRect,
-) -> bool {
+) -> c_int {
     unsafe {
         (*out).left = (*a).left.max((*b).left);
         (*out).right = (*a).right.min((*b).right);
         (*out).top = (*a).top.max((*b).top);
         (*out).bottom = (*a).bottom.min((*b).bottom);
 
-        (*out).left < (*out).right && (*out).top < (*out).bottom
+        if (*out).left < (*out).right && (*out).top < (*out).bottom { 1 } else { 0 }
     }
 }
 
@@ -1407,13 +1422,18 @@ pub extern "C" fn set_bounce_side_flags(line: *mut Line, x: i16, bounce_field_0x
 /// 0` in the C); `part2->borders_data` being null skips straight to `part1`'s next border
 /// without ever running the inner loop (matching the C's `if (p2bd) { ... }` guard, under
 /// which the inner `while` never even begins).
+///
+/// Returns c_int (0/1), not a genuine bool -- this codebase's `bool` is `typedef int bool`
+/// (c_src/int.h), so returning Rust's native 1-byte `bool` here was ABI-compatible only by
+/// chance (the C caller tests all 32 bits for truthiness). See the matching C prototype
+/// comment in c_src/tim.h.
 #[no_mangle]
-pub extern "C" fn part_borders_intersect(part1: *const Part, part2: *const Part) -> bool {
+pub extern "C" fn part_borders_intersect(part1: *const Part, part2: *const Part) -> c_int {
     unsafe {
         let mut p1bi: u16 = 1;
         let mut p1bd = (*part1).borders_data;
         if p1bd.is_null() {
-            return false;
+            return 0;
         }
 
         let p1b0x = ((*part1).pos.x as i32 + (*p1bd.add(0)).x as i32) as i16;
@@ -1462,7 +1482,7 @@ pub extern "C" fn part_borders_intersect(part1: *const Part, part2: *const Part)
                     if intersects != 0
                         && !(intersection.x == line1.p1.x && intersection.y == line1.p1.y)
                     {
-                        return true;
+                        return 1;
                     }
 
                     p2bi += 1;
@@ -1500,7 +1520,7 @@ pub extern "C" fn part_borders_intersect(part1: *const Part, part2: *const Part)
             }
         }
 
-        false
+        0
     }
 }
 
@@ -1975,10 +1995,15 @@ pub extern "C" fn part_create_func(part_type: c_int, part: &mut Part) -> c_int {
 /// Safety: no pointer is ever touched here. `part_type` is a bare `enum PartType` value
 /// passed by value (a bare C enum here is a 4-byte value, not a pointer), matching the C
 /// signature exactly, so there is no null path to preserve.
+///
+/// Returns c_int (0/1), not a genuine bool -- this codebase's `bool` is `typedef int bool`
+/// (c_src/int.h), so returning Rust's native 1-byte `bool` here was ABI-compatible only by
+/// chance (the C caller tests all 32 bits for truthiness). See the matching C prototype
+/// comment in c_src/tim.h.
 #[no_mangle]
-pub extern "C" fn is_low_res_and_specific_part(part_type: c_int) -> bool {
+pub extern "C" fn is_low_res_and_specific_part(part_type: c_int) -> c_int {
     if unsafe { crate::globals::VALUES_PER_PIXEL } > 256 {
-        return false;
+        return 0;
     }
 
     // I'm not really sure what's so special about these parts.
@@ -1999,9 +2024,9 @@ pub extern "C" fn is_low_res_and_specific_part(part_type: c_int) -> bool {
         | PartType::ElectricEngine
         | PartType::Nail
         | PartType::DirtWall
-        | PartType::PinballBumper => true,
+        | PartType::PinballBumper => 1,
 
-        _ => false,
+        _ => 0,
     }
 }
 

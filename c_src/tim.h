@@ -107,13 +107,21 @@ struct Part* next_part_or_fallback(struct Part *part, int choice);
 u16 part_get_movement_delta_angle(struct Part *part);
 void bucket_add_mass(struct Part *bucket, struct Part *part);
 void bucket_add_mass_of_contained(struct Part *bucket);
-bool calculate_intersecting_rect(struct GDIRect *out, struct GDIRect *a, struct GDIRect *b);
+// Rust (src/tim_c.rs) returns c_int (0/1), not a genuine predicate -- `bool` here (this
+// codebase's `bool` is `typedef int bool;`, see c_src/int.h) was ABI-compatible only by
+// chance (both are 4-byte ints); declared as `int` so scripts/check-ffi-signatures.py can
+// verify it for real.
+int calculate_intersecting_rect(struct GDIRect *out, struct GDIRect *a, struct GDIRect *b);
 u16 quadrant_from_angle(u16 angle);
-bool bucket_contains(struct Part *bucket, struct Part *contains);
+// Rust (src/tim_c.rs) returns c_int (0/1), not a genuine predicate -- see the matching
+// comment above calculate_intersecting_rect.
+int bucket_contains(struct Part *bucket, struct Part *contains);
 void tmp_3a6a_update_vars(void);
 void four_points_adjust_p1_by_one(struct Line *points);
-bool should_parts_skip_collision(enum PartType a, enum PartType b);
-bool is_low_res_and_specific_part(enum PartType type);
+// Rust (src/tim_c.rs) returns c_int (0/1), not a genuine predicate -- see the matching
+// comment above calculate_intersecting_rect.
+int should_parts_skip_collision(enum PartType a, enum PartType b);
+int is_low_res_and_specific_part(enum PartType type);
 void part_clamp_to_terminal_velocity(struct Part *part);
 void tmp_3a6c_update_vars(void);
 void initialize_llamas(void);
@@ -130,7 +138,11 @@ void part_set_prev_vars(struct Part *part);
 void all_parts_set_prev_vars();
 void update_rope_pos(struct RopeData *rope);
 u16 rope_calculate_flags(struct RopeData *rope, int param_2, int param_3);
-void teeter_totter_helper_1(struct Part *part, bool is_bottom, s16 offset_x);
+// `is_bottom` is c_int (0/1) on the Rust side (src/parts/mod.rs), not a genuine predicate --
+// `bool` here (this codebase's `bool` is `typedef int bool;`, see c_src/int.h) was
+// ABI-compatible only by chance (both are 4-byte ints); declared as `int` so
+// scripts/check-ffi-signatures.py can verify it for real.
+void teeter_totter_helper_1(struct Part *part, int is_bottom, s16 offset_x);
 int teeter_totter_helper_2(struct Part *exclude_part, struct Part *part, u16 flags, s16 mass, s32 force);
 int teeter_totter_bounce(struct Part *part);
 
@@ -218,7 +230,11 @@ struct Line {
 
 // Defined in Rust (src/tim_c.rs).
 void set_bounce_side_flags(struct Line *line, s16 x, byte *bounce_field_0x86);
-bool part_borders_intersect(const struct Part *part1, const struct Part *part2);
+// Rust (src/tim_c.rs) returns c_int (0/1), not a genuine predicate -- `bool` here (this
+// codebase's `bool` is `typedef int bool;`, see c_src/int.h) was ABI-compatible only by
+// chance (both are 4-byte ints); declared as `int` so scripts/check-ffi-signatures.py can
+// verify it for real.
+int part_borders_intersect(const struct Part *part1, const struct Part *part2);
 
 void play_sound(int id);
 

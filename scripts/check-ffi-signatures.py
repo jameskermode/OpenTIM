@@ -46,7 +46,7 @@ Comparisons are ABI-based, not textual. The project's established mapping is use
     a bare C enum (4 bytes) <-> u32
     size_t               <-> usize
     struct ShortVec      <-> ShortVec (ditto for the other small structs)
-    bool                 <-> bool
+    C bool (typedef int) <-> c_int / i32 / u32 (i.e. the 4-byte-int class -- see below)
 
 Two deliberate simplifications, both explained where they're applied in code below:
   - `enum PartType -> c_int` and `other enum -> u32` are both treated as the same 4-byte
@@ -61,12 +61,19 @@ Two deliberate simplifications, both explained where they're applied in code bel
     corrupt data the way a size mismatch can -- it is a stricter-than-C annotation on the
     Rust side at worst. Flagging it would produce noise without catching real bugs, so it
     is intentionally not checked.
-  `bool` is kept as its own distinct class rather than folded into the 4-byte-int class:
-  this codebase's `bool` (c_src/int.h: `typedef int bool;`) is 4 bytes in C, but Rust's
-  native `bool` is 1 byte -- a real, established mismatch class (this is exactly what's
-  wrong with part_explicit_size et al. below). Per the task's own mapping table, `bool`
-  only matches Rust `bool`; a C `bool` prototype satisfied by a Rust `c_int`/`i32` return
-  is flagged as a mismatch, not treated as equivalent.
+
+C `bool` is NOT its own ABI class. This codebase's `bool` is `typedef int bool;`
+(c_src/int.h) -- i.e. a plain 4-byte int, indistinguishable in C from `int`/`s32`/`u32`.
+The C-side normaliser (`normalize_c_type`, via `C_SCALAR_CLASS`) resolves a C `bool`
+straight to the same "int4" class as `int`, exactly as the typedef says. Rust's native
+`bool`, by contrast, really is a distinct 1-byte type (`RUST_SCALAR_CLASS["bool"] ==
+"bool"`, never folded into "int4"). The two are therefore genuinely different ABI classes:
+a C `bool` prototype paired with a Rust function returning/taking native `bool` is a real
+mismatch (C passes/reads 4 bytes, Rust only defines the low byte) and is flagged as such;
+a C `bool` prototype paired with Rust `c_int`/`i32`/`u32` matches, because that is what the
+C typedef actually is. (An earlier version of this script instead classed C `bool` as its
+own class equal to Rust `bool` -- that silently accepted the native-Rust-`bool`-for-C-`int`
+mismatch this paragraph now catches; see part_borders_intersect et al.)
 """
 import re
 import sys
@@ -97,13 +104,21 @@ C_GLOB_DIRS = ["c_src"]
 
 # C base-type name (after stripping `struct`/`enum`/`const` keywords) -> ABI class.
 # ABI classes: 'int1'/'int2'/'int4'/'int8' (byte width, signedness-agnostic -- see module
-# docstring), 'usize' (pointer-width, from size_t), 'bool' (its own class -- see above).
+# docstring), 'usize' (pointer-width, from size_t), 'bool' (Rust's native 1-byte bool --
+# nothing on the C side of this codebase ever normalises to this class; see below).
+#
+# `bool` here is deliberately in the SAME class as `int`/`s32`/`u32`/`long`: this codebase's
+# c_src/int.h has `typedef int bool;`, so a C `bool` is a plain 4-byte int, full stop -- there
+# is no distinct C bool ABI to model. Folding it into "int4" is what makes a C `bool`
+# prototype paired with a Rust `bool` (1 byte) return/param show up as a real mismatch
+# (int4 vs bool), which is exactly the bug class this script exists to catch (see
+# part_borders_intersect et al.). Giving C `bool` its own class here would make it match
+# Rust's `bool` and silently hide that mismatch -- which is the hole this comment replaces.
 C_SCALAR_CLASS = {
     "byte": "int1", "u8": "int1", "sbyte": "int1", "s8": "int1", "char": "int1",
     "u16": "int2", "s16": "int2",
-    "u32": "int4", "s32": "int4", "long": "int4", "int": "int4",
+    "u32": "int4", "s32": "int4", "long": "int4", "int": "int4", "bool": "int4",
     "u64": "int8", "int64_t": "int8",
-    "bool": "bool",
     "size_t": "usize",
     "void": "unit",
 }
@@ -118,6 +133,7 @@ SIGN_WORD = {"u": "unsigned", "s": "signed"}
 C_SIGNEDNESS = {
     "u8": "u", "byte": "u", "u16": "u", "u32": "u", "u64": "u", "size_t": "u",
     "s8": "s", "sbyte": "s", "s16": "s", "s32": "s", "int": "s", "long": "s",
+    "bool": "s",  # typedef int bool -- signed, same as plain `int`
 }
 RUST_SIGNEDNESS = {
     "u8": "u", "u16": "u", "u32": "u", "u64": "u", "usize": "u",

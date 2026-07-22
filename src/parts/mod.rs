@@ -449,8 +449,13 @@ mod teeter_totter {
     /// `ivar2` is computed in `i32` (mirroring C's promotion of the `s16` operands to `int`
     /// for `+`/`-`) and then truncated back to `i16` on assignment, matching C's implicit
     /// narrowing conversion to the declared `s16` local.
+    ///
+    /// `is_bottom` is c_int (0/1), not a genuine bool -- this codebase's `bool` is `typedef
+    /// int bool` (c_src/int.h), so a Rust native `bool` parameter here was ABI-compatible
+    /// only by chance (every C call site passes a plain `0`/`1` int literal). See the
+    /// matching C prototype comment in c_src/tim.h.
     #[no_mangle]
-    pub extern "C" fn teeter_totter_helper_1(part: *mut Part, is_bottom: bool, offset_x: i16) {
+    pub extern "C" fn teeter_totter_helper_1(part: *mut Part, is_bottom: c_int, offset_x: i16) {
         extern "C" {
             fn mort_the_mouse_cage_start(part: *mut Part);
             fn bob_the_fish_break_bowl(part: *mut Part);
@@ -465,7 +470,7 @@ mod teeter_totter {
             let pt = unsafe { (*curpart).part_type };
 
             if pt == PartType::DynamiteWithPlunger.to_u16() {
-                if is_bottom {
+                if is_bottom != 0 {
                     if unsafe { (*curpart).flags2 } & F2_FLIP_HORZ == 0 {
                         if ivar2 > 0x66 && ivar2 < 0x88 {
                             unsafe { (*curpart).state2 = 1; }
@@ -491,7 +496,7 @@ mod teeter_totter {
                     }
                 }
             } else if pt == PartType::Flashlight.to_u16() {
-                if is_bottom {
+                if is_bottom != 0 {
                     if unsafe { (*curpart).flags2 } & F2_FLIP_HORZ == 0 {
                         if ivar2 > 4 && ivar2 < 0x11 {
                             unsafe { (*curpart).state2 = 1; }
