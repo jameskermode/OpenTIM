@@ -601,6 +601,31 @@ pub extern "C" fn arctan_c(dx: i32, dy: i32) -> u16 {
 /// both `i16` operands to (32-bit) `int` before subtracting, so the result cannot overflow
 /// and no truncation happens before it reaches `arctan_c`'s `i32` parameters. Casting to
 /// `i32` before subtracting reproduces that exactly.
+/// TIMWIN: 1050:0221
+/// Returns 0 to 3.
+/// Accurate
+///
+/// Safety: no pointer dereferences at all -- pure arithmetic on the `u16` angle.
+///
+/// In C, `angle + 0x2000` promotes `angle` to (32-bit) `int` before adding, so the addition
+/// itself never wraps -- the sum can reach 0x11FFF for `angle == 0xFFFF`. Here `wrapping_add`
+/// instead truncates the sum to 16 bits before the shift. That still produces an identical
+/// final answer: `>> 14` followed by `& 3` only ever looks at bits 14 and 15 of the sum,
+/// and truncating to 16 bits only discards bit 16 and above, which the final `& 3` mask
+/// would have discarded anyway (that carry bit lands on bit 2 after the shift, outside the
+/// 2-bit mask). So the two formulations are equivalent for every `u16` input, and
+/// `wrapping_add` additionally satisfies Rust's overflow checks in debug builds.
+#[no_mangle]
+pub extern "C" fn quadrant_from_angle(angle: u16) -> u16 {
+    if angle == 0x2000 {
+        return 0;
+    }
+    if angle == 0xa000 {
+        return 2;
+    }
+    (angle.wrapping_add(0x2000) >> 14) & 3
+}
+
 #[no_mangle]
 pub extern "C" fn part_get_movement_delta_angle(part: *mut Part) -> u16 {
     unsafe {

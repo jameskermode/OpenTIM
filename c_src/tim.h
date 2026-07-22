@@ -98,6 +98,7 @@ void remove_part_from_linked_list(struct Part *part);
 u16 part_get_movement_delta_angle(struct Part *part);
 void bucket_add_mass(struct Part *bucket, struct Part *part);
 bool calculate_intersecting_rect(struct GDIRect *out, struct GDIRect *a, struct GDIRect *b);
+u16 quadrant_from_angle(u16 angle);
 
 #define EACH_STATIC_PART(varname) for (struct Part *varname = STATIC_PARTS_ROOT.next; varname != 0; varname = varname->next)
 #define EACH_MOVING_PART(varname) for (struct Part *varname = MOVING_PARTS_ROOT.next; varname != 0; varname = varname->next)

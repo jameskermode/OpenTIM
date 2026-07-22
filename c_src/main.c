@@ -393,18 +393,7 @@ void part_update_vel_and_force(struct Part *part) {
     part->force = mul32(abs(part->vel_hi_precision.x) + abs(part->vel_hi_precision.y), part->mass);
 }
 
-/* TIMWIN: 1050:0221
-   Returns 0 to 3.
-   Accurate */
-u16 quadrant_from_angle(u16 angle) {
-    if (angle == 0x2000) {
-        return 0;
-    }
-    if (angle == 0xa000) {
-        return 2;
-    }
-    return ((angle + 0x2000) >> 14) & 3;
-}
+// quadrant_from_angle has moved to Rust (src/tim_c.rs).
 
 // part_get_movement_delta_angle has moved to Rust (src/tim_c.rs).
 
