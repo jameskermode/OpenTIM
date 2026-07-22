@@ -1265,14 +1265,7 @@ void stub_1080_1777(struct Part *part) {
 }
 
 
-// bucket_add_mass has moved to Rust (src/tim_c.rs).
-
-/* TIMWIN: 10a8:45c6 */
-void bucket_add_mass_of_contained(struct Part *bucket) {
-    EACH_INTERACION(bucket, curpart) {
-        bucket_add_mass(bucket, curpart);
-    }
-}
+// bucket_add_mass and bucket_add_mass_of_contained have moved to Rust (src/tim_c.rs).
 
 /* TIMWIN: 1090:15c8
    Accurate */

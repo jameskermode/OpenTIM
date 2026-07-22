@@ -105,6 +105,7 @@ struct Part* get_first_part(int choice);
 struct Part* next_part_or_fallback(struct Part *part, int choice);
 u16 part_get_movement_delta_angle(struct Part *part);
 void bucket_add_mass(struct Part *bucket, struct Part *part);
+void bucket_add_mass_of_contained(struct Part *bucket);
 bool calculate_intersecting_rect(struct GDIRect *out, struct GDIRect *a, struct GDIRect *b);
 u16 quadrant_from_angle(u16 angle);
 bool bucket_contains(struct Part *bucket, struct Part *contains);

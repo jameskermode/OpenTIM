@@ -915,10 +915,10 @@ pub extern "C" fn part_get_movement_delta_angle(part: *mut Part) -> u16 {
 /// TIMWIN: 10a8:45f8
 ///
 /// Safety: `bucket` and `part` are both dereferenced unconditionally, exactly matching the C
-/// (no null checks there either). The only caller, `bucket_add_mass_of_contained` (still C),
-/// invokes this once per node of `bucket->interactions` via `EACH_INTERACION`, which never
-/// yields a null node, and passes the same non-null `bucket` throughout, so both pointers are
-/// always valid live `Part`s.
+/// (no null checks there either). The only caller, `bucket_add_mass_of_contained` (below),
+/// invokes this once per node of `bucket->interactions` via the `EACH_INTERACION`-equivalent
+/// walk, which never yields a null node, and passes the same non-null `bucket` throughout, so
+/// both pointers are always valid live `Part`s.
 ///
 /// The sum is computed in `i32` exactly like the C's `(s32)bucket->mass + (s32)part->mass`,
 /// so it cannot overflow (both `mass` fields are `i16`, the widest possible sum comfortably
@@ -933,6 +933,25 @@ pub extern "C" fn bucket_add_mass(bucket: *mut Part, part: *mut Part) {
             sum = 32000;
         }
         (*bucket).mass = sum as i16;
+    }
+}
+
+/// TIMWIN: 10a8:45c6
+///
+/// Safety: `bucket` is dereferenced unconditionally to read `interactions`, matching the C's
+/// `EACH_INTERACION(bucket, curpart)` macro (`c_src/tim.h`), which expands to `for (struct
+/// Part *curpart = bucket->interactions; curpart != 0; curpart = curpart->interactions)` --
+/// no null check on `bucket` there either. The walk itself checks `curpart` against null
+/// before every dereference (both the loop condition and the `bucket_add_mass` call use it
+/// only once already known non-null), exactly matching the macro's `curpart != 0` guard.
+#[no_mangle]
+pub extern "C" fn bucket_add_mass_of_contained(bucket: *mut Part) {
+    unsafe {
+        let mut curpart = (*bucket).interactions;
+        while !curpart.is_null() {
+            bucket_add_mass(bucket, curpart);
+            curpart = (*curpart).interactions;
+        }
     }
 }
 
