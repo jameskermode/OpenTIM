@@ -276,15 +276,24 @@ pub fn line_intersection(a: ((i16, i16), (i16, i16)),
     let b_dx = b.1.0 as i32 - b.0.0 as i32;
     let b_dy = b.1.1 as i32 - b.0.1 as i32;
 
-    let ivar3 = a_dy*a.1.0 as i32 - a_dx*a.1.1 as i32;
-    let ivar4 = b_dy*b.0.0 as i32 - b_dx*b.0.1 as i32;
-    let ivar5 = b_dy*a_dx - b_dx*a_dy;
+    // The products/sums below (and the division further down) can exceed i32 when the
+    // inputs sit near the extremes of i16 -- e.g. two parts at opposite ends of the 16-bit
+    // coordinate space. The original 16-bit C computed this in plain `int` and silently
+    // wrapped on overflow; Rust's debug build instead panics on overflowing arithmetic, and
+    // because this is reached from `calculate_line_intersection`, an `extern "C"` function,
+    // a panic here unwinds into foreign code and the runtime aborts the whole process rather
+    // than raising a catchable error. So these use `wrapping_*` to reproduce the original
+    // C's wraparound instead of panicking; for any input that does not overflow, the results
+    // are bit-identical to the non-wrapping arithmetic this replaces.
+    let ivar3 = a_dy.wrapping_mul(a.1.0 as i32).wrapping_sub(a_dx.wrapping_mul(a.1.1 as i32));
+    let ivar4 = b_dy.wrapping_mul(b.0.0 as i32).wrapping_sub(b_dx.wrapping_mul(b.0.1 as i32));
+    let ivar5 = b_dy.wrapping_mul(a_dx).wrapping_sub(b_dx.wrapping_mul(a_dy));
 
     let out: (i16, i16);
     if ivar5 != 0 {
-        out = (((ivar4*a_dx - ivar3*b_dx) / ivar5) as i16,
-               ((ivar4*a_dy - ivar3*b_dy) / ivar5) as i16);
-    } else if b_dy*a.0.0 as i32 + b_dx*a.0.1 as i32 == 0 {
+        out = ((ivar4.wrapping_mul(a_dx).wrapping_sub(ivar3.wrapping_mul(b_dx)).wrapping_div(ivar5)) as i16,
+               (ivar4.wrapping_mul(a_dy).wrapping_sub(ivar3.wrapping_mul(b_dy)).wrapping_div(ivar5)) as i16);
+    } else if b_dy.wrapping_mul(a.0.0 as i32).wrapping_add(b_dx.wrapping_mul(a.0.1 as i32)) == 0 {
         out = a.1;
     } else {
         out = (0, 0);
@@ -397,6 +406,22 @@ mod line_intersection_tests {
         let r = line_intersection(((5, 1), (5, 1)),
                                   ((5, 1), (5, 1)));
         assert_eq!(r, (true, (5, 1)));
+    }
+
+    /// Regression test for a latent panic: with inputs at opposite extremes of the i16
+    /// range, the internal i32 products (and the final division) overflow. Before the
+    /// `wrapping_*` fix this hit "attempt to multiply with overflow" and, because the real
+    /// call path is through the `extern "C"` `calculate_line_intersection`, aborted the
+    /// whole process instead of unwinding. It must now simply return a (possibly
+    /// nonsensical, wrapped) value, matching the original C's silent wraparound.
+    #[test]
+    fn extreme_i16_inputs_do_not_panic() {
+        let r = line_intersection(((i16::MAX, i16::MAX), (i16::MIN, i16::MIN)),
+                                  ((i16::MIN, i16::MAX), (i16::MAX, i16::MIN)));
+        // The exact value is a wrapped artifact, not a meaningful geometric answer -- the
+        // point of this test is that it returns at all instead of panicking/aborting.
+        // (Observed value with this fix: (true, (0, 0)).)
+        let _ = r;
     }
 }
 

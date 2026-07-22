@@ -132,26 +132,22 @@ fn random_points(rng: &mut Prng, count: usize) -> Vec<(u8, u8)> {
     (0..count).map(|_| (biased_byte(rng), biased_byte(rng))).collect()
 }
 
-/// A bounded offset between the two parts in a generated pair.
+/// The offset between the two parts in a generated pair.
 ///
-/// IMPORTANT: this must stay bounded, not span the full i16 range. `part_borders_intersect`
-/// itself only ever adds a `u8` border offset to a part's `pos` and truncates back to i16
-/// (see `four_points_adjust_p1_by_one`'s doc comment) -- that's safe by construction and is
-/// exactly what `biased_pos` below exists to stress. But its downstream helper
-/// `calculate_line_intersection` -> `math::line_intersection` (already-ported, NOT part of
-/// this task's subject function, and not touched by it) does its cross-multiplication in
-/// plain (non-wrapping) `i32`, sized for realistic in-level geometry. Placing two parts at
-/// opposite extremes of the full 16-bit space (e.g. one at `i16::MAX`, the other at
-/// `i16::MIN`) overflows that multiplication and panics in a debug build -- confirmed while
-/// writing this generator (`attempt to multiply with overflow` at src/math.rs:285). That is
-/// never a realistic input (collision checks only ever run between spatially close parts in
-/// any real level) and is a latent issue in a different, already-verified function, so it is
-/// out of scope for a `part_borders_intersect`-focused differential harness to trip over by
-/// accident. Keeping the two parts' positions correlated (a modest offset from a shared,
-/// possibly-extreme base) still exercises real 16-bit wraparound at each part's own
-/// pos+border boundary without manufacturing that unrelated, unrealistic crash.
+/// This now spans the FULL i16 range, including combinations that place the two parts at
+/// opposite extremes (e.g. one at `i16::MAX`, the other at `i16::MIN`). It used to be kept
+/// bounded: `part_borders_intersect`'s downstream helper `calculate_line_intersection` ->
+/// `math::line_intersection` did its cross-multiplication in plain (non-wrapping) `i32`,
+/// sized for realistic in-level geometry, and placing two parts at opposite i16 extremes
+/// overflowed that multiplication and panicked in a debug build (`attempt to multiply with
+/// overflow` at src/math.rs:285) -- confirmed while writing this generator. `line_intersection`
+/// has since been fixed to use `wrapping_*` arithmetic (matching the original C's silent
+/// wraparound on overflow), so that panic is gone and this generator no longer needs to
+/// avoid the combination. Covering the extreme range here is exactly the point: it proves
+/// `part_borders_intersect` (and the `line_intersection` it calls through) agrees with the
+/// frozen C reference even in the previously-overflowing cases.
 fn biased_delta(rng: &mut Prng) -> i16 {
-    match rng.range_i64(0, 9) {
+    match rng.range_i64(0, 11) {
         0 => 0,
         1 => 10,
         2 => -10,
@@ -159,7 +155,11 @@ fn biased_delta(rng: &mut Prng) -> i16 {
         4 => -255,
         5 => 256,
         6 => -256,
-        _ => rng.range_i64(-2000, 2000) as i16,
+        7 => i16::MAX,
+        8 => i16::MIN,
+        9 => i16::MAX - 1,
+        10 => i16::MIN + 1,
+        _ => rng.next_i16(),
     }
 }
 
@@ -267,15 +267,28 @@ fn handcrafted_cases() -> Vec<(PartSpec, PartSpec)> {
         PartSpec::with_points((i16::MIN + 5, 0), 4, &square(0, 0, 10)),
         PartSpec::with_points((i16::MIN + 5, 5), 4, &square(0, 0, 10)),
     ));
-    // NOTE: deliberately NOT testing two parts at opposite extremes of the full i16 range
-    // (e.g. one at i16::MAX, the other at i16::MIN) together -- see the doc comment on
-    // `biased_delta` above for why that combination overflows an unrelated, already-ported
-    // helper (`math::line_intersection`) instead of exercising this function. Both parts
-    // here sit at the SAME extreme corner (close together, as any real colliding pair
+    // Both parts sit at the SAME extreme corner (close together, as any real colliding pair
     // would be), which still stresses each part's own pos+border wraparound.
     cases.push((
         PartSpec::with_points((i16::MAX, i16::MAX), 4, &[(0, 0), (255, 0), (255, 255), (0, 255)]),
         PartSpec::with_points((i16::MAX - 20, i16::MAX - 20), 4, &[(0, 0), (255, 0), (255, 255), (0, 255)]),
+    ));
+
+    // Two parts at OPPOSITE extremes of the full i16 range (one at i16::MAX, the other at
+    // i16::MIN). This used to be deliberately excluded: it drove `math::line_intersection`'s
+    // internal i32 cross-multiplication past i32::MAX and panicked in a debug build
+    // (`attempt to multiply with overflow` at src/math.rs:285), which aborted the process
+    // because the call path runs through the `extern "C"` `calculate_line_intersection`.
+    // `line_intersection` now uses `wrapping_*` arithmetic (matching the original C's silent
+    // wraparound), so this combination is exactly the fidelity case worth pinning down: it
+    // must return without panicking AND agree with the frozen C reference.
+    cases.push((
+        PartSpec::with_points((i16::MAX, i16::MAX), 4, &[(0, 0), (255, 0), (255, 255), (0, 255)]),
+        PartSpec::with_points((i16::MIN, i16::MIN), 4, &[(0, 0), (255, 0), (255, 255), (0, 255)]),
+    ));
+    cases.push((
+        PartSpec::with_points((i16::MIN, i16::MAX), 4, &[(0, 0), (255, 0), (255, 255), (0, 255)]),
+        PartSpec::with_points((i16::MAX, i16::MIN), 4, &[(0, 0), (255, 0), (255, 255), (0, 255)]),
     ));
 
     // Larger polygon (octagon-ish) against a square.
