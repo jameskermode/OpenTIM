@@ -1758,56 +1758,6 @@ void stub_10a8_2b6d(struct Part *part, int c) {
     }
 }
 
-/* TIMWIN: 10a8:4690 */
-void part_set_prev_vars(struct Part *part) {
-    part->pos_prev2 = part->pos_prev1;
-    part->pos_prev1 = part->pos;
-
-    part->pos_render_prev2 = part->pos_render_prev1;
-    part->pos_render_prev1 = part->pos_render;
-
-    part->size_prev2 = part->size_prev1;
-    part->size_prev1 = part->size;
-
-    part->state1_prev2 = part->state1_prev1;
-    part->state1_prev1 = part->state1;
-
-    if (part->type == P_BELT && LEVEL_STATE == DESIGN_MODE) {
-        struct BeltData *belt = part->belt_data;
-
-        belt->pos1_prev2 = belt->pos1_prev1;
-        belt->pos1_prev1 = belt->pos1;
-
-        belt->pos2_prev2 = belt->pos2_prev1;
-        belt->pos2_prev1 = belt->pos2;
-
-        belt->pos3_prev2 = belt->pos3_prev1;
-        belt->pos3_prev1 = belt->pos3;
-
-        belt->pos4_prev2 = belt->pos4_prev1;
-        belt->pos4_prev1 = belt->pos4;
-    }
-
-    if (part->type == P_ROPE || part->type == P_PULLEY) {
-        struct RopeData *rope = part->rope_data[0];
-
-        rope->rope_unknown_prev2 = rope->rope_unknown_prev1;
-        rope->rope_unknown_prev1 = rope->rope_unknown;
-
-        rope->ends_pos_prev2[0] = rope->ends_pos_prev1[0];
-        rope->ends_pos_prev1[0] = rope->ends_pos[0];
-
-        rope->ends_pos_prev2[1] = rope->ends_pos_prev1[1];
-        rope->ends_pos_prev1[1] = rope->ends_pos[1];
-    }
-
-    part->extra1_prev2 = part->extra1_prev1;
-    part->extra1_prev1 = part->extra1;
-
-    part->extra2_prev2 = part->extra2_prev1;
-    part->extra2_prev1 = part->extra2;
-}
-
 /* TIMWIN: 10a8:4645 */
 void all_parts_set_prev_vars() {
     if (SELECTED_PART) {

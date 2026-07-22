@@ -1627,6 +1627,70 @@ pub extern "C" fn belt_set_four_pos(belt: *mut BeltData) {
     }
 }
 
+/// TIMWIN: 10a8:4690
+///
+/// Safety: `part` is dereferenced unconditionally throughout, exactly matching the C
+/// (`part->pos_prev1`, etc., no null check anywhere in the original). `part->belt_data` is
+/// dereferenced unconditionally when `part_type == P_BELT` and `LEVEL_STATE == DESIGN_MODE`,
+/// and `part->rope_data[0]` is dereferenced unconditionally when `part_type` is `P_ROPE` or
+/// `P_PULLEY`, matching the C's unchecked `belt->pos1_prev1` / `rope->rope_unknown_prev1`;
+/// every caller passes a belt/rope part whose `belt_data`/`rope_data[0]` is populated, same
+/// invariant the C relied on.
+///
+/// All fields copied here (`ShortVec`, `i16`) are plain value copies -- no arithmetic, so no
+/// truncation or promotion is involved.
+#[no_mangle]
+pub extern "C" fn part_set_prev_vars(part: *mut Part) {
+    unsafe {
+        (*part).pos_prev2 = (*part).pos_prev1;
+        (*part).pos_prev1 = (*part).pos;
+
+        (*part).pos_render_prev2 = (*part).pos_render_prev1;
+        (*part).pos_render_prev1 = (*part).pos_render;
+
+        (*part).size_prev2 = (*part).size_prev1;
+        (*part).size_prev1 = (*part).size;
+
+        (*part).state1_prev2 = (*part).state1_prev1;
+        (*part).state1_prev1 = (*part).state1;
+
+        if (*part).part_type == PartType::Belt.to_u16() && crate::globals::LEVEL_STATE == 0x1000 {
+            let belt = (*part).belt_data;
+
+            (*belt).pos1_prev2 = (*belt).pos1_prev1;
+            (*belt).pos1_prev1 = (*belt).pos1;
+
+            (*belt).pos2_prev2 = (*belt).pos2_prev1;
+            (*belt).pos2_prev1 = (*belt).pos2;
+
+            (*belt).pos3_prev2 = (*belt).pos3_prev1;
+            (*belt).pos3_prev1 = (*belt).pos3;
+
+            (*belt).pos4_prev2 = (*belt).pos4_prev1;
+            (*belt).pos4_prev1 = (*belt).pos4;
+        }
+
+        if (*part).part_type == PartType::Rope.to_u16() || (*part).part_type == PartType::Pulley.to_u16() {
+            let rope = (*part).rope_data[0];
+
+            (*rope).rope_unknown_prev2 = (*rope).rope_unknown_prev1;
+            (*rope).rope_unknown_prev1 = (*rope).rope_unknown;
+
+            (*rope).ends_pos_prev2[0] = (*rope).ends_pos_prev1[0];
+            (*rope).ends_pos_prev1[0] = (*rope).ends_pos[0];
+
+            (*rope).ends_pos_prev2[1] = (*rope).ends_pos_prev1[1];
+            (*rope).ends_pos_prev1[1] = (*rope).ends_pos[1];
+        }
+
+        (*part).extra1_prev2 = (*part).extra1_prev1;
+        (*part).extra1_prev1 = (*part).extra1;
+
+        (*part).extra2_prev2 = (*part).extra2_prev1;
+        (*part).extra2_prev1 = (*part).extra2;
+    }
+}
+
 // `rand` is only needed by `generate_hypot_samples` below, which (like the C original) is dead
 // code never compiled into a shipped build. It is deliberately NOT declared for wasm32: the
 // wasm shim (`src/wasm_libc.rs`) never provided a `rand` either, for the same reason -- the C
