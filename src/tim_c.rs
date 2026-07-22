@@ -1370,6 +1370,140 @@ pub extern "C" fn set_bounce_side_flags(line: *mut Line, x: i16, bounce_field_0x
     }
 }
 
+/// TIMWIN: 10a8:0555
+///
+/// Decides whether the collision borders of `part1` and `part2` overlap, by testing every
+/// edge of `part1`'s border polygon against every edge of `part2`'s border polygon for a
+/// segment intersection (via `four_points_adjust_p1_by_one` + `calculate_line_intersection`,
+/// both already ported above), all in a coordinate frame relative to `part1`'s first border
+/// point (`p1origin_x`/`p1origin_y`).
+///
+/// Border points (`struct BorderPoint`'s `x`/`y`) are `u8`. Every place the C combines one
+/// with a part's `s16` `pos.x`/`pos.y` promotes both operands to `int` before adding, then
+/// truncates back to `s16` on assignment -- reproduced here as `as i32` addition followed by
+/// `as i16`, which truncates/wraps identically to the C's implementation-defined narrowing
+/// (the same pattern already used by `four_points_adjust_p1_by_one` above for its `+-1`
+/// adjustments). The two `line1`/`line2` component subtractions (`p1b1x - p1origin_x`, etc.)
+/// are likewise done as `i32` and cast back to `i16` afterward, matching C's `int`-widened
+/// subtraction of two `s16` operands truncated on assignment to the `struct Line`'s `s16`
+/// fields.
+///
+/// The pointer walk over each part's `borders_data` array is a literal translation of the
+/// C's raw-pointer walk: at loop entry the code has already read one index ahead (`[0]` and
+/// `[1]`), and each iteration's tail reads one *further* index ahead (`[2]`, relative to the
+/// not-yet-advanced pointer) before advancing the pointer by one and only after confirming
+/// (via the `border_idx > num_borders` / `num_borders == border_idx` checks) that index is
+/// in bounds -- when the last border is reached, the "next" point wraps back to the first
+/// border point (`b0x`/`b0y`) instead of reading past the array, exactly as the C does. This
+/// is reproduced with the same `.add(0)`/`.add(1)`/`.add(2)` offsets from the current pointer
+/// rather than switching to indexed slice access, so the exact bounds-check-then-read order
+/// (and any out-of-bounds read the C would perform for a malformed/1-border part) is
+/// preserved rather than "fixed".
+///
+/// Safety: `part1`/`part2` are dereferenced unconditionally (no null checks on the pointers
+/// themselves), matching the C -- only `borders_data` is null-checked, exactly as the C
+/// null-checks `p1bd`/`p2bd` and nothing else. Every caller passes live, non-null `Part`
+/// pointers. `part1->borders_data` being null returns `false` immediately (matching `return
+/// 0` in the C); `part2->borders_data` being null skips straight to `part1`'s next border
+/// without ever running the inner loop (matching the C's `if (p2bd) { ... }` guard, under
+/// which the inner `while` never even begins).
+#[no_mangle]
+pub extern "C" fn part_borders_intersect(part1: *const Part, part2: *const Part) -> bool {
+    unsafe {
+        let mut p1bi: u16 = 1;
+        let mut p1bd = (*part1).borders_data;
+        if p1bd.is_null() {
+            return false;
+        }
+
+        let p1b0x = ((*part1).pos.x as i32 + (*p1bd.add(0)).x as i32) as i16;
+        let p1b0y = ((*part1).pos.y as i32 + (*p1bd.add(0)).y as i32) as i16;
+        let mut p1b1x = ((*part1).pos.x as i32 + (*p1bd.add(1)).x as i32) as i16;
+        let mut p1b1y = ((*part1).pos.y as i32 + (*p1bd.add(1)).y as i32) as i16;
+        let mut p1origin_x = p1b0x;
+        let mut p1origin_y = p1b0y;
+
+        while !p1bd.is_null() {
+            let mut line1 = Line {
+                p0: ShortVec { x: 0, y: 0 },
+                p1: ShortVec {
+                    x: (p1b1x as i32 - p1origin_x as i32) as i16,
+                    y: (p1b1y as i32 - p1origin_y as i32) as i16,
+                },
+            };
+            four_points_adjust_p1_by_one(&mut line1);
+
+            let mut p2bi: u16 = 1;
+            let mut p2bd = (*part2).borders_data;
+            if !p2bd.is_null() {
+                let p2b0x = ((*part2).pos.x as i32 + (*p2bd.add(0)).x as i32) as i16;
+                let p2b0y = ((*part2).pos.y as i32 + (*p2bd.add(0)).y as i32) as i16;
+                let mut p2b1x = ((*part2).pos.x as i32 + (*p2bd.add(1)).x as i32) as i16;
+                let mut p2b1y = ((*part2).pos.y as i32 + (*p2bd.add(1)).y as i32) as i16;
+                let mut p2origin_x = p2b0x;
+                let mut p2origin_y = p2b0y;
+
+                while !p2bd.is_null() {
+                    let mut line2 = Line {
+                        p0: ShortVec {
+                            x: (p2origin_x as i32 - p1origin_x as i32) as i16,
+                            y: (p2origin_y as i32 - p1origin_y as i32) as i16,
+                        },
+                        p1: ShortVec {
+                            x: (p2b1x as i32 - p1origin_x as i32) as i16,
+                            y: (p2b1y as i32 - p1origin_y as i32) as i16,
+                        },
+                    };
+                    four_points_adjust_p1_by_one(&mut line2);
+
+                    let mut intersection = ShortVec { x: 0, y: 0 };
+                    let intersects = calculate_line_intersection(&line1, &line2, &mut intersection);
+
+                    if intersects != 0
+                        && !(intersection.x == line1.p1.x && intersection.y == line1.p1.y)
+                    {
+                        return true;
+                    }
+
+                    p2bi += 1;
+                    if p2bi > (*part2).num_borders {
+                        p2bd = std::ptr::null_mut();
+                    } else {
+                        p2origin_x = p2b1x;
+                        p2origin_y = p2b1y;
+                        if (*part2).num_borders == p2bi {
+                            p2b1x = p2b0x;
+                            p2b1y = p2b0y;
+                        } else {
+                            p2b1x = ((*part2).pos.x as i32 + (*p2bd.add(2)).x as i32) as i16;
+                            p2b1y = ((*part2).pos.y as i32 + (*p2bd.add(2)).y as i32) as i16;
+                        }
+                        p2bd = p2bd.add(1);
+                    }
+                }
+            }
+
+            p1bi += 1;
+            if p1bi > (*part1).num_borders {
+                p1bd = std::ptr::null_mut();
+            } else {
+                p1origin_x = p1b1x;
+                p1origin_y = p1b1y;
+                if (*part1).num_borders == p1bi {
+                    p1b1x = p1b0x;
+                    p1b1y = p1b0y;
+                } else {
+                    p1b1x = ((*part1).pos.x as i32 + (*p1bd.add(2)).x as i32) as i16;
+                    p1b1y = ((*part1).pos.y as i32 + (*p1bd.add(2)).y as i32) as i16;
+                }
+                p1bd = p1bd.add(1);
+            }
+        }
+
+        false
+    }
+}
+
 /// TIMWIN: 10a8:2bea
 ///
 /// Renamed from `stub_10a8_2bea`. Decompiling `10a8:2bea` in Ghidra shows real logic here

@@ -218,6 +218,7 @@ struct Line {
 
 // Defined in Rust (src/tim_c.rs).
 void set_bounce_side_flags(struct Line *line, s16 x, byte *bounce_field_0x86);
+bool part_borders_intersect(const struct Part *part1, const struct Part *part2);
 
 void play_sound(int id);
 
