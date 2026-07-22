@@ -161,19 +161,7 @@ void part_calculate_border_normals(struct Part *part) {
 
 void part_set_size(struct Part *part);
 
-/* TIMWIN: 10a8:2485 */
-struct Part* get_first_part(int choice) {
-    if (STATIC_PARTS_ROOT.next && (choice & CHOOSE_STATIC_PART)) {
-        return STATIC_PARTS_ROOT.next;
-    }
-    if (MOVING_PARTS_ROOT.next && (choice & CHOOSE_MOVING_PART)) {
-        return MOVING_PARTS_ROOT.next;
-    }
-    if (PARTS_BIN_ROOT.next && (choice & CHOOSE_FROM_PARTS_BIN)) {
-        return PARTS_BIN_ROOT.next;
-    }
-    return 0;
-}
+// get_first_part has moved to Rust (src/tim_c.rs).
 
 /* TIMWIN: 10a8:24d8 */
 struct Part* next_part_or_fallback(struct Part *part, int choice) {

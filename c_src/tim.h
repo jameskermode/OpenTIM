@@ -85,7 +85,6 @@ enum GetPartsFlags {
     CHOOSE_STATIC_OR_ELSE_MOVING_PART=0x3000
 };
 
-struct Part* get_first_part(int choice);
 struct Part* next_part_or_fallback(struct Part *part, int choice);
 
 // Defined in Rust (src/tim_c.rs).
@@ -95,6 +94,7 @@ struct BeltData* belt_data_alloc();
 struct RopeData* rope_data_alloc();
 size_t debug_part_size();
 void remove_part_from_linked_list(struct Part *part);
+struct Part* get_first_part(int choice);
 u16 part_get_movement_delta_angle(struct Part *part);
 void bucket_add_mass(struct Part *bucket, struct Part *part);
 bool calculate_intersecting_rect(struct GDIRect *out, struct GDIRect *a, struct GDIRect *b);

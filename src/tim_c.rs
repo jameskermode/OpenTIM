@@ -692,6 +692,33 @@ pub extern "C" fn tmp_3a6a_update_vars() {
     }
 }
 
+/// TIMWIN: 10a8:2485
+///
+/// Safety: no `Part` is ever dereferenced here. `STATIC_PARTS_ROOT`, `MOVING_PARTS_ROOT` and
+/// `PARTS_BIN_ROOT` are permanent sentinel `Part`s that exist for the whole program lifetime
+/// (`static mut Part`, never freed), so reading their `.next` field is always sound; that
+/// field is merely returned to the caller, not dereferenced. The null path matches the C
+/// exactly: if none of the three roots has a non-null `.next` for a selected list, this
+/// returns a null pointer (`std::ptr::null_mut()`), exactly like the C's trailing `return 0`.
+#[no_mangle]
+pub extern "C" fn get_first_part(choice: c_int) -> *mut Part {
+    const CHOOSE_FROM_PARTS_BIN: c_int = 0x800;
+    const CHOOSE_MOVING_PART: c_int = 0x1000;
+    const CHOOSE_STATIC_PART: c_int = 0x2000;
+    unsafe {
+        if !STATIC_PARTS_ROOT.next.is_null() && (choice & CHOOSE_STATIC_PART) != 0 {
+            return STATIC_PARTS_ROOT.next;
+        }
+        if !MOVING_PARTS_ROOT.next.is_null() && (choice & CHOOSE_MOVING_PART) != 0 {
+            return MOVING_PARTS_ROOT.next;
+        }
+        if !PARTS_BIN_ROOT.next.is_null() && (choice & CHOOSE_FROM_PARTS_BIN) != 0 {
+            return PARTS_BIN_ROOT.next;
+        }
+        std::ptr::null_mut()
+    }
+}
+
 /// TIMWIN: 1090:158b
 /// Accurate
 ///
