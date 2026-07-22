@@ -13,7 +13,6 @@ extern {
     pub fn insert_part_into_static_parts(part: *mut Part);
     pub fn insert_part_into_moving_parts(part: *mut Part);
     pub fn insert_part_into_parts_bin(part: *mut Part);
-    pub fn calculate_rope_sag(part: *const Part, rope_data: *const RopeData, time: c_int) -> i16;
 
     pub fn stub_10a8_21cb(part: *mut Part, c: u8);
     pub fn stub_10a8_2b6d(part: *mut Part, c: c_int);
@@ -2397,6 +2396,79 @@ pub extern "C" fn update_rope_pos(rope: *mut RopeData) {
                 approximate_hypot_of_rope(rope, 3 /* ROPETIME_CURRENT */, 0 /* ROPE_FROM_FIRST */);
             (*(*rope).rope_or_pulley_part).extra2 =
                 approximate_hypot_of_rope(rope, 3 /* ROPETIME_CURRENT */, 1 /* ROPE_FROM_LAST */);
+        }
+    }
+}
+
+/// TIMWIN: 10a8:3b05
+/// Accurate
+///
+/// Safety: `part` is dereferenced unconditionally to read `part->type`/`links_to`, matching
+/// the C's unchecked `part->type`/`part->links_to[...]` (no null check anywhere in the
+/// original). `rope_data` is likewise dereferenced unconditionally throughout, matching the
+/// C's unchecked `rope_data->part1_rope_slot`/`rope_data->rope_or_pulley_part`/etc.
+/// `rope_data->rope_or_pulley_part` (`rope_part`) is dereferenced unconditionally in both
+/// branches to read `extra1`/`extra1_prev1`/`extra1_prev2` or `extra2`/`extra2_prev1`/
+/// `extra2_prev2`, matching the C exactly. `nextpart` is only read (for the null check and
+/// the `rope_data->part2 != nextpart` comparison) in the `else` branch, exactly mirroring
+/// the C's `if (!nextpart) return 0;` guard -- it is never dereferenced here or in the C.
+///
+/// `rope_data->part1 == part` compares a `*mut Part` field against the `*const Part`
+/// parameter; both are cast to `*const Part` for the comparison, which compares the same
+/// bit pattern the C's `struct Part *` vs `const struct Part *` comparison does (pointer
+/// const-ness has no effect on the compared value).
+///
+/// The `switch (time)` is reproduced as a `match` on the same three cases (`ROPETIME_PREV2`
+/// = 1, `ROPETIME_PREV1` = 2, default = `ROPETIME_CURRENT`/anything else), matching the C's
+/// `default` arm catching any other value, not just `ROPETIME_CURRENT` specifically.
+///
+/// `v - approximate_hypot_of_rope(...)` mirrors C's integer promotion: both `i16` operands
+/// promote to `i32` for the subtraction, and only the result truncates back to `i16` on
+/// return, matching the C's implicit `s16 = (int)(s16 - s16)` narrowing on the function's
+/// `s16` return type.
+///
+/// Gate-exercised: yes for the `rope_data->part1 == part` branch and the `ROPETIME_CURRENT`
+/// (default) case, since `calculate_rope_sag` is called with `time = 3` from
+/// `src/tim_c.rs`'s rope-sag-drawing path (`sag = calculate_rope_sag(curpart, rope, 3)`) for
+/// every rope end in the test levels, and the "first part of the rope" case is the common
+/// one. The `ROPETIME_PREV1`/`ROPETIME_PREV2` cases, the `rope_data->part2 == part`
+/// (`else`) branch, its `!nextpart`/`rope_data->part2 != nextpart` early-outs, and the
+/// `P_PULLEY` `nextpart` selection are not confirmed exercised by the current gate calls
+/// (only ever invoked with `time == ROPETIME_CURRENT`) and rest on reading the C.
+#[no_mangle]
+pub extern "C" fn calculate_rope_sag(part: *const Part, rope_data: *const RopeData, time: c_int) -> i16 {
+    unsafe {
+        let nextpart: *mut Part;
+        if (*part).part_type == PartType::Pulley as u16 {
+            nextpart = (*part).links_to[0];
+        } else {
+            nextpart = (*part).links_to[(*rope_data).part1_rope_slot as usize];
+        }
+
+        let rope_part = (*rope_data).rope_or_pulley_part;
+
+        if (*rope_data).part1 as *const Part == part {
+            let v: i16 = match time {
+                1 => (*rope_part).extra1_prev2, // ROPETIME_PREV2
+                2 => (*rope_part).extra1_prev1, // ROPETIME_PREV1
+                _ => (*rope_part).extra1,
+            };
+            ((v as i32) - (approximate_hypot_of_rope(rope_data, time, 0 /* ROPE_FROM_FIRST */) as i32)) as i16
+        } else {
+            if nextpart.is_null() {
+                return 0;
+            }
+            if (*rope_data).part2 != nextpart {
+                return 0;
+            }
+
+            let v: i16 = match time {
+                1 => (*rope_part).extra2_prev2, // ROPETIME_PREV2
+                2 => (*rope_part).extra2_prev1, // ROPETIME_PREV1
+                _ => (*rope_part).extra2,
+            };
+
+            ((v as i32) - (approximate_hypot_of_rope(rope_data, time, 1 /* ROPE_FROM_LAST */) as i32)) as i16
         }
     }
 }

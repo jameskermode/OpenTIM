@@ -2,46 +2,7 @@
 
 // approximate_hypot_of_rope: implemented in Rust (src/tim_c.rs); prototyped in tim.h.
 
-/* TIMWIN: 10a8:3b05
-   Accurate */
-s16 calculate_rope_sag(const struct Part *part, const struct RopeData *rope_data, enum RopeTime time) {
-    struct Part *nextpart;
-    if (part->type == P_PULLEY) {
-        nextpart = part->links_to[0];
-    } else {
-        nextpart = part->links_to[rope_data->part1_rope_slot];
-    }
-
-    struct Part *rope_part;
-
-    rope_part = rope_data->rope_or_pulley_part;
-
-    if (rope_data->part1 == part) {
-        s16 v;
-        switch (time) {
-            case ROPETIME_PREV2: v = rope_part->extra1_prev2; break;
-            case ROPETIME_PREV1: v = rope_part->extra1_prev1; break;
-            default:             v = rope_part->extra1; break;
-        }
-        return v - approximate_hypot_of_rope(rope_data, time, ROPE_FROM_FIRST);
-    } else {
-        if (!nextpart) {
-            return 0;
-        }
-        if (rope_data->part2 != nextpart) {
-            return 0;
-        }
-
-        s16 v;
-        switch (time) {
-            case ROPETIME_PREV2: v = rope_part->extra2_prev2; break;
-            case ROPETIME_PREV1: v = rope_part->extra2_prev1; break;
-            default:             v = rope_part->extra2; break;
-        }
-
-        return v - approximate_hypot_of_rope(rope_data, time, ROPE_FROM_LAST);
-    }
-}
+// calculate_rope_sag has moved to Rust (src/tim_c.rs).
 
 #if ENABLE_TEST_SUITE
 // generate_hypot_samples(int n, int max_val) used to live here as dev tooling for

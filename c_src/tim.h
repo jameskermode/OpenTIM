@@ -265,6 +265,7 @@ enum RopeFirstOrLast {
 };
 
 s16 approximate_hypot_of_rope(const struct RopeData *rope_data, enum RopeTime time, enum RopeFirstOrLast first_or_last);
+s16 calculate_rope_sag(const struct Part *part, const struct RopeData *rope_data, enum RopeTime time);
 /* */
 
 
