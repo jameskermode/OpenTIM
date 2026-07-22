@@ -554,27 +554,6 @@ void balloon_run(struct Part *part) {
     part_set_size_and_pos_render(part);
 }
 
-/* TIMWIN: 1048:082b */
-int balloon_rope(struct Part *p1, struct Part *p2, int rope_slot, u16 flags, s16 p1_mass, s32 p1_force) {
-    if (flags == 0x0001) {
-        p2->rope_data[0]->rope_unknown += 1;
-        return 0;
-    }
-    if (p1->type == P_TEETER_TOTTER) {
-        if (p1_force < p2->force) {
-            return 1;
-        } else {
-            return 0;
-        }
-    } else {
-        if (p1_force < p2->force*2) {
-            return 1;
-        } else {
-            return 0;
-        }
-    }
-}
-
 /* TIMWIN: 1090:1094 */
 void search_for_interactions(struct Part *part, enum GetPartsFlags choice, s16 search_x_min, s16 search_x_max, s16 search_y_min, s16 search_y_max) {
     part->interactions = 0;

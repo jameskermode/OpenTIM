@@ -519,9 +519,52 @@ mod balloon {
         true
     }
 
+    /// TIMWIN: 1048:082b
+    ///
+    /// Safety: `p2` is dereferenced unconditionally to reach `rope_data[0]`, exactly matching
+    /// the C's unchecked `p2->rope_data[0]->rope_unknown`; every caller passes a rope-connected
+    /// balloon whose primary rope slot is populated, matching the invariant the C relied on
+    /// (no null check existed there either). `p1` is dereferenced unconditionally to read
+    /// `part_type`, matching the C's unchecked `p1->type`.
+    ///
+    /// `rope_unknown += 1` and `p2->force * 2` are both done with wrapping arithmetic to
+    /// reproduce C's silent `s16`/`s32` overflow (the C has no overflow checks; Rust's debug
+    /// builds do, so a plain `+=`/`*` here would panic instead of wrapping the way the
+    /// original does).
+    #[no_mangle]
+    pub extern "C" fn balloon_rope(
+        p1: *mut Part,
+        p2: *mut Part,
+        _rope_slot: c_int,
+        flags: u16,
+        _p1_mass: i16,
+        p1_force: i32,
+    ) -> c_int {
+        unsafe {
+            if flags == 0x0001 {
+                let rd = (*p2).rope_data[0];
+                (*rd).rope_unknown = (*rd).rope_unknown.wrapping_add(1);
+                return 0;
+            }
+            if (*p1).part_type == PartType::TeeterTotter as u16 {
+                if p1_force < (*p2).force {
+                    1
+                } else {
+                    0
+                }
+            } else {
+                if p1_force < (*p2).force.wrapping_mul(2) {
+                    1
+                } else {
+                    0
+                }
+            }
+        }
+    }
+
     // TIMWIN: 1048:082b
     fn rope(p1: &mut Part, p2: &mut Part, rope_slot: u8, flags: u16, p1_mass: i16, p1_force: i32) -> u8 {
-        rope_c!(balloon_rope, p1, p2, rope_slot, flags, p1_mass, p1_force);
+        balloon_rope(p1 as *mut Part, p2 as *mut Part, rope_slot as c_int, flags, p1_mass, p1_force) as u8
     }
 }
 
