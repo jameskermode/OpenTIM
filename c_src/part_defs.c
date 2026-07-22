@@ -99,48 +99,8 @@ enum RopeFlags {
 
 // rope_calculate_flags: implemented in Rust (src/tim_c.rs); prototyped in tim.h.
 
-/* TIMWIN: 10d0:0627 */
-int teeter_totter_helper_2(struct Part *exclude_part, struct Part *part, u16 flags, s16 mass, s32 force) {
-    if (ANY_FLAGS(part->flags2, 0x0200)) {
-        return 1;
-    }
-
-    for (int i = 0; i < 2; i++) {
-        struct RopeData *rpd = part->rope_data[i];
-        if (!rpd) continue;
-
-        struct Part *other_part = rope_get_other_part(part, rpd);
-        if (other_part == exclude_part) continue;
-
-        byte bvar1, bvar2;
-
-        if (rpd->part1 != part) {
-            bvar1 = rpd->part2_rope_slot;
-            bvar2 = rpd->part1_rope_slot;
-        } else {
-            bvar1 = rpd->part1_rope_slot;
-            bvar2 = rpd->part2_rope_slot;
-        }
-
-        int rope_slot = bvar2;
-        int ivar4;
-
-        if (part->state2 < 1) {
-            ivar4 = bvar1 == 0 ? 1 : 0;
-        } else {
-            ivar4 = bvar1 == 0 ? 0 : 1;
-        }
-
-        u16 new_flags = rope_calculate_flags(rpd, rpd->part1 == part ? 0 : 1, ivar4);
-
-        int res = part_rope(other_part->type, part, other_part, rope_slot, new_flags | flags, mass, force);
-        if (res != 0) {
-            return res;
-        }
-    }
-
-    return 0;
-}
+// teeter_totter_helper_2: implemented in Rust (src/parts/mod.rs, mod teeter_totter);
+// prototyped in tim.h.
 
 /* TIMWIN: 1090:1289 */
 void stub_1090_1289(struct Part *teeter_part, enum GetPartsFlags choice, const struct Line *line) {

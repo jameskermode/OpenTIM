@@ -131,6 +131,7 @@ void all_parts_set_prev_vars();
 void update_rope_pos(struct RopeData *rope);
 u16 rope_calculate_flags(struct RopeData *rope, int param_2, int param_3);
 void teeter_totter_helper_1(struct Part *part, bool is_bottom, s16 offset_x);
+int teeter_totter_helper_2(struct Part *exclude_part, struct Part *part, u16 flags, s16 mass, s32 force);
 
 #define EACH_STATIC_PART(varname) for (struct Part *varname = STATIC_PARTS_ROOT.next; varname != 0; varname = varname->next)
 #define EACH_MOVING_PART(varname) for (struct Part *varname = MOVING_PARTS_ROOT.next; varname != 0; varname = varname->next)

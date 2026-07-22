@@ -516,6 +516,85 @@ mod teeter_totter {
         }
     }
 
+    /// TIMWIN: 10d0:0627
+    ///
+    /// Safety: `part` is dereferenced unconditionally to read `flags2`, `rope_data`, and
+    /// `state2`, exactly matching the C (`part->flags2`, `part->rope_data[i]`, `part->state2`,
+    /// no null check anywhere in the original). Each `rope_data[i]` is null-checked before use
+    /// (matching the C's `if (!rpd) continue;`); the `other_part` it resolves to (the C's
+    /// `rope_get_other_part` is a `static inline` helper with no exported symbol, so its
+    /// two-line branch is inlined here rather than called across the FFI boundary) is then
+    /// dereferenced unconditionally to read `part1`/`type`, matching the C's unchecked
+    /// `rpd->part1`/`other_part->type`. Every caller already must supply a live `part` whose
+    /// linked ropes (if any) connect to live parts, the same precondition the original C
+    /// carried.
+    ///
+    /// The only other functions called are `rope_calculate_flags` and `part_rope`, both
+    /// Rust-implemented (`tim_c::rope_calculate_flags`, `tim_c::part_rope`), so this function
+    /// calls no C function, remaining a leaf.
+    #[no_mangle]
+    pub extern "C" fn teeter_totter_helper_2(
+        exclude_part: *mut Part,
+        part: *mut Part,
+        flags: u16,
+        mass: i16,
+        force: i32,
+    ) -> c_int {
+        unsafe {
+            if (*part).flags2 & 0x0200 != 0 {
+                return 1;
+            }
+
+            for i in 0..2usize {
+                let rpd = (*part).rope_data[i];
+                if rpd.is_null() {
+                    continue;
+                }
+
+                let other_part = if (*rpd).part1 == part { (*rpd).part2 } else { (*rpd).part1 };
+                if other_part == exclude_part {
+                    continue;
+                }
+
+                let (bvar1, bvar2): (u8, u8) = if (*rpd).part1 != part {
+                    ((*rpd).part2_rope_slot, (*rpd).part1_rope_slot)
+                } else {
+                    ((*rpd).part1_rope_slot, (*rpd).part2_rope_slot)
+                };
+
+                let rope_slot = bvar2 as c_int;
+
+                let ivar4: c_int = if (*part).state2 < 1 {
+                    if bvar1 == 0 { 1 } else { 0 }
+                } else {
+                    if bvar1 == 0 { 0 } else { 1 }
+                };
+
+                let new_flags = tim_c::rope_calculate_flags(
+                    rpd,
+                    if (*rpd).part1 == part { 0 } else { 1 },
+                    ivar4,
+                );
+
+                let other_part_type = (*other_part).part_type as c_int;
+                let res = tim_c::part_rope(
+                    other_part_type,
+                    &mut *part,
+                    &mut *other_part,
+                    rope_slot,
+                    new_flags | flags,
+                    mass,
+                    force,
+                );
+                if res != 0 {
+                    return res;
+                }
+            }
+
+            0
+        }
+    }
+
     // TIMWIN: 10d0:0240
     fn run(part: &mut Part) {
         run_c!(teeter_totter_run, part);
