@@ -108,6 +108,7 @@ and the entire editing UI.
 | Levels | 7 of the 87 shipped puzzles load and simulate |
 | Browser build | Works, bit-identical to native |
 | Editing / design mode | Not started — see `docs/specs/` |
+| C-to-Rust port | Layer 0 complete — 37 of 92 legacy C functions (781 of 3,392 lines) moved to Rust; 55 functions / 2,611 lines remain in `c_src/main.c`, `part_defs.c` and `draw_rope.c`. See `docs/specs/2026-07-22-c-to-rust-port-design.md`. |
 
 Levels that fail do so only because they contain parts that are still
 `unimplemented()`. Missing parts cluster by theme: everything electrical, all

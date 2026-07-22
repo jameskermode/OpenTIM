@@ -83,7 +83,7 @@ and field.
   tests, cross-configuration simulation comparison and reload check all pass. Every later
   task uses this as its test cycle.
 
-- [ ] **Step 1: Write the gate script**
+- [x] **Step 1: Write the gate script**
 
 Create `scripts/verify.sh`:
 
@@ -168,7 +168,7 @@ fi
 if [ "$FAIL" = "0" ]; then echo "ALL CHECKS PASSED"; else echo "CHECKS FAILED"; exit 1; fi
 ```
 
-- [ ] **Step 2: Make it executable and run it against current HEAD**
+- [x] **Step 2: Make it executable and run it against current HEAD**
 
 ```bash
 chmod +x scripts/verify.sh && ./scripts/verify.sh
@@ -177,7 +177,7 @@ chmod +x scripts/verify.sh && ./scripts/verify.sh
 Expected: ends with `ALL CHECKS PASSED`. If it fails here, the gate itself is wrong —
 fix it before porting anything, because every later task trusts it.
 
-- [ ] **Step 3: Prove the gate actually catches a regression**
+- [x] **Step 3: Prove the gate actually catches a regression**
 
 Deliberately break the simulation, confirm the gate fails, then revert:
 
@@ -192,7 +192,7 @@ git checkout src/parts/mod.rs
 Expected: the middle run prints `CHECKS FAILED`, the last prints `ALL CHECKS PASSED`.
 A gate that cannot fail is worthless; this step is not optional.
 
-- [ ] **Step 4: Document it**
+- [x] **Step 4: Document it**
 
 Add to `CLAUDE.md` under the build section:
 
@@ -206,7 +206,7 @@ and checks that loading a level replaces the previous world. Run it after every
 function ported from C.
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/verify.sh CLAUDE.md
@@ -230,7 +230,7 @@ git commit -m "Add the verification gate for the C to Rust port"
   *mut Part`. Later tasks read and write these directly instead of adding `extern`
   declarations one at a time.
 
-- [ ] **Step 1: Read the current globals**
+- [x] **Step 1: Read the current globals**
 
 ```bash
 cat c_src/globals.h
@@ -239,7 +239,7 @@ cat c_src/globals.h
 There are 39, declared through a `GLOBAL(declaration, init)` macro that expands to a
 definition in `globals.c` and an `extern` declaration everywhere else.
 
-- [ ] **Step 2: Create the Rust definitions**
+- [x] **Step 2: Create the Rust definitions**
 
 Create `src/globals.rs`. Every global keeps its exact C name so the C half links against
 it unchanged. Example of the required form — write one of these for each of the 39:
@@ -283,7 +283,7 @@ impl Part {
 }
 ```
 
-- [ ] **Step 3: Declare the module**
+- [x] **Step 3: Declare the module**
 
 In `src/lib.rs`, add alongside the other module declarations:
 
@@ -291,7 +291,7 @@ In `src/lib.rs`, add alongside the other module declarations:
 pub mod globals;
 ```
 
-- [ ] **Step 4: Reduce the C side to declarations**
+- [x] **Step 4: Reduce the C side to declarations**
 
 Change `c_src/globals.h` so the `GLOBAL` macro always produces an `extern` declaration,
 never a definition:
@@ -307,7 +307,7 @@ Replace the whole contents of `c_src/globals.c` with:
 /* Globals moved to Rust; see src/globals.rs. This file is intentionally empty. */
 ```
 
-- [ ] **Step 5: Remove the duplicate Rust imports**
+- [x] **Step 5: Remove the duplicate Rust imports**
 
 In `src/tim_c.rs`, delete these lines from the `extern { ... }` block, since Rust now
 defines them rather than importing them:
@@ -330,7 +330,7 @@ pub use crate::globals::{
 };
 ```
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
 
 ```bash
 ./scripts/verify.sh
@@ -339,7 +339,7 @@ pub use crate::globals::{
 Expected: `ALL CHECKS PASSED`. A link error naming a global means one is missing from
 `src/globals.rs` or misspelled; the C name must match exactly.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/globals.rs src/lib.rs src/tim_c.rs c_src/globals.h c_src/globals.c
@@ -361,7 +361,7 @@ git commit -m "port: move the globals to Rust"
 These three have no real body — they are `UNIMPLEMENTED` shells. They carry zero
 behavioural risk and are the right place to establish the pattern.
 
-- [ ] **Step 1: Read them**
+- [x] **Step 1: Read them**
 
 ```bash
 grep -n "stub_10a8_0880\|stub_10a8_1329\|stub_10a8_28a5" c_src/main.c
@@ -377,7 +377,7 @@ int stub_10a8_1329(struct BeltData *belt) {
 }
 ```
 
-- [ ] **Step 2: Add the Rust versions**
+- [x] **Step 2: Add the Rust versions**
 
 In `src/tim_c.rs`, append (keeping each function's real signature — check the C for the
 exact parameter types before writing these):
@@ -390,12 +390,12 @@ pub extern "C" fn stub_10a8_1329(_belt: *mut BeltData) -> c_int {
 }
 ```
 
-- [ ] **Step 3: Delete the C bodies**
+- [x] **Step 3: Delete the C bodies**
 
 Remove the three function definitions from `c_src/main.c`, and make sure a prototype for
 each exists in `c_src/tim.h` so remaining C callers still compile.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 ```bash
 ./scripts/verify.sh
@@ -404,7 +404,7 @@ each exists in `c_src/tim.h` so remaining C callers still compile.
 Expected: `ALL CHECKS PASSED`. These functions are not reached by the 7 loadable levels,
 so the simulation output must be unchanged.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/tim_c.rs c_src/main.c c_src/tim.h
@@ -427,7 +427,7 @@ git commit -m "port: move the three UNIMPLEMENTED stubs to Rust"
 These allocate with `malloc` and zero with `memset`. In Rust they use the same allocator
 the existing `src/wasm_libc.rs` shim wraps, so allocation behaviour is unchanged.
 
-- [ ] **Step 1: Add the Rust implementations**
+- [x] **Step 1: Add the Rust implementations**
 
 In `src/tim_c.rs`:
 
@@ -476,23 +476,23 @@ Write `belt_data_alloc`, `rope_data_alloc` and `part_free` the same way. `part_f
 keep its ownership rules exactly: free `borders_data` always; free `belt_data` only when
 `F2_0001` is clear; free `rope_data[0]` only when the part is `P_PULLEY` or `P_ROPE`.
 
-- [ ] **Step 2: A caution about `free`**
+- [x] **Step 2: A caution about `free`**
 
 The C used `malloc`/`free`. Rust's `dealloc` needs the same `Layout` the allocation used,
 which is why `part_free_borders` reconstructs it from `num_borders`. Any allocation whose
 size is not recoverable at free time must keep using the C allocator until its partner
 moves in the same commit. Port allocate/free pairs together, never one at a time.
 
-- [ ] **Step 3: Delete the C bodies and keep prototypes**
+- [x] **Step 3: Delete the C bodies and keep prototypes**
 
 Remove those functions from `c_src/main.c`; ensure `c_src/tim.h` declares each one.
 
-- [ ] **Step 4: Remove the now-duplicate extern declarations**
+- [x] **Step 4: Remove the now-duplicate extern declarations**
 
 Delete `part_alloc`, `part_free`, `belt_data_alloc`, `rope_data_alloc`,
 `debug_part_size` from the `extern { ... }` block in `src/tim_c.rs`.
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 ```bash
 ./scripts/verify.sh
@@ -506,7 +506,7 @@ leaks -atExit -- ./target/debug/examples/reload game-data/tim1 L6.LEV L31.LEV L2
 
 Expected: `0 leaks for 0 total leaked bytes`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/tim_c.rs c_src/main.c c_src/tim.h
@@ -528,14 +528,14 @@ git commit -m "port: move part and rope/belt allocation to Rust"
 This runs in parallel with the ports and gates nothing in Tasks 1-4. It is needed before
 the layer-0 stubs in Task 7 can be given real names.
 
-- [ ] **Step 1: Install Ghidra and a JDK**
+- [x] **Step 1: Install Ghidra and a JDK**
 
 ```bash
 brew install --cask ghidra temurin
 ghidraRun &
 ```
 
-- [ ] **Step 2: Confirm the binary is the exact reference**
+- [x] **Step 2: Confirm the binary is the exact reference**
 
 ```bash
 shasum -a 256 ~/Downloads/TemIM3x/CD/TEMIM.EXE
@@ -547,12 +547,12 @@ Expected exactly:
 Use `CD/TEMIM.EXE`. Do **not** use `TIMWIN/TEMIM.EXE` — it has been patched by
 `CD/patch/PATCH.EXE` and its addresses will not match the `TIMWIN:` comments.
 
-- [ ] **Step 3: Import and auto-analyse**
+- [x] **Step 3: Import and auto-analyse**
 
 Create a new Ghidra project, import `CD/TEMIM.EXE`. Ghidra recognises the 16-bit NE
 format. Run auto-analysis with defaults.
 
-- [ ] **Step 4: Name the Win16 imports**
+- [x] **Step 4: Name the Win16 imports**
 
 Add `reverse-engineering/ghidra-scripts` and `scripts` as script directories, then run
 `rename-win16-fns.py`. It resolves ordinal imports from GDI/USER/KERNEL into real names
@@ -563,7 +563,7 @@ need porting to PyGhidra. If they fail, record what broke in
 `docs/reverse-engineering-setup.md` rather than silently skipping them — the Win16 names
 are what make the graphics-adjacent code readable.
 
-- [ ] **Step 5: Validate the address mapping on a known function**
+- [x] **Step 5: Validate the address mapping on a known function**
 
 Pick a function whose behaviour is already understood and confirm the disassembly matches.
 `c_src/main.c` documents `remove_part_from_linked_list` as `TIMWIN: 10a8:1e18`. In Ghidra,
@@ -573,13 +573,13 @@ unlinks a node from a doubly-linked list.
 If this does not match, the address mapping is wrong and every later identification would
 be wrong too. Stop and resolve it before continuing.
 
-- [ ] **Step 6: Write down the procedure**
+- [x] **Step 6: Write down the procedure**
 
 Create `docs/reverse-engineering-setup.md` recording: the Ghidra version used, the exact
 import settings, whether the scripts needed porting and how, how segment:offset maps to a
 Ghidra address, and the validation result from Step 5.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add docs/reverse-engineering-setup.md reverse-engineering/README.md
@@ -603,12 +603,12 @@ appendix, smallest first. Apply the port recipe to each one. Commit after each f
 or after a group of closely related ones, but run `./scripts/verify.sh` before every
 commit.
 
-- [ ] **Step 1: Port functions in appendix order, smallest first**
+- [x] **Step 1: Port functions in appendix order, smallest first**
 
 For each: read the C, write the Rust `extern "C"` equivalent, delete the C body, keep the
 prototype in `tim.h`, remove any duplicate `extern` import, run the gate, commit.
 
-- [ ] **Step 2: Handle the `static` helpers**
+- [x] **Step 2: Handle the `static` helpers**
 
 Eight functions have no external linkage and cannot be exported individually:
 
@@ -635,7 +635,7 @@ fn uneg(v: u16) -> u16 {
 }
 ```
 
-- [ ] **Step 3: Confirm layer 0 is empty of identified functions**
+- [x] **Step 3: Confirm layer 0 is empty of identified functions**
 
 ```bash
 grep -c "^[a-zA-Z_].*)\s*{$" c_src/main.c
@@ -643,7 +643,7 @@ grep -c "^[a-zA-Z_].*)\s*{$" c_src/main.c
 
 Expected: lower than the starting count of 80 by the number of functions ported.
 
-- [ ] **Step 4: Full verification**
+- [x] **Step 4: Full verification**
 
 ```bash
 ./scripts/verify.sh
@@ -667,12 +667,12 @@ The eight are: `stub_10a8_0328`, `stub_10a8_1329`, `stub_10a8_0880`, `stub_10a8_
 plus the remainder listed in the appendix. Three were already handled in Task 3 as
 `UNIMPLEMENTED` shells; the rest have real bodies.
 
-- [ ] **Step 1: Identify each in Ghidra**
+- [x] **Step 1: Identify each in Ghidra**
 
 For each stub, navigate to its `segment:offset` and read the original. Record what it
 does, what it reads and writes, and who calls it.
 
-- [ ] **Step 2: Rename only where confident**
+- [x] **Step 2: Rename only where confident**
 
 If the purpose is unambiguous, rename the Rust function to something descriptive and add a
 doc comment, keeping the `TIMWIN:` address. If it is not clear, keep the `stub_` name and
@@ -681,14 +681,14 @@ write down what was learned. A wrong name is worse than no name.
 Renaming means updating every C caller too. Run the gate afterwards — a rename that misses
 a caller is a link error, not a silent bug.
 
-- [ ] **Step 3: Port each with the recipe, verifying after every one**
+- [x] **Step 3: Port each with the recipe, verifying after every one**
 
-- [ ] **Step 4: Record what is still unidentified**
+- [x] **Step 4: Record what is still unidentified**
 
 Update `docs/reverse-engineering-setup.md` with a table of the stubs, whether each was
 identified, and any partial findings.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -702,29 +702,37 @@ git commit -m "port: move the layer-0 stubs to Rust"
 **Files:**
 - Modify: `README.md`, `docs/specs/2026-07-22-c-to-rust-port-design.md`
 
-- [ ] **Step 1: Measure what is left**
+- [x] **Step 1: Measure what is left**
 
 ```bash
 wc -l c_src/*.c
 grep -c "^[a-zA-Z_].*)\s*{$" c_src/main.c
 ```
 
-- [ ] **Step 2: Update the status table in `README.md`**
+- [x] **Step 2: Update the status table in `README.md`**
 
 Add a row recording how much C remains, so the progress is visible to anyone landing on
 the repository.
 
-- [ ] **Step 3: Mark layer 0 complete in the spec**
+- [x] **Step 3: Mark layer 0 complete in the spec**
 
 Change the spec's status line from `approved, not yet started` to
 `in progress — layer 0 complete`.
 
-- [ ] **Step 4: Full verification and push**
+- [x] **Step 4: Full verification and push**
 
 ```bash
 ./scripts/verify.sh
 git add -A && git commit -m "Record layer 0 port progress"
 ```
+
+**Closing note:** one function named in this plan, `part_free_borders`, deliberately stayed
+in C. It is paired with `part_alloc_borders`, which is a layer-1 function (variable-length
+allocation keyed on `length`, not a fixed-size leaf), so moving `part_free_borders` alone
+would split an allocate/free pair across languages — exactly what Task 4 Step 2 warns
+against. It moves together with `part_alloc_borders` when layer 1 is planned. Every other
+identified layer-0 function, plus the eight `stub_XXXX_XXXX` addresses, is in Rust; see the
+spec's "Layer 0 outcome" section for the measured totals.
 
 ---
 

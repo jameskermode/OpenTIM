@@ -1,6 +1,6 @@
 # Porting the remaining C to Rust
 
-Status: approved, not yet started
+Status: in progress — layer 0 complete
 Date: 2026-07-22
 
 ## Goal
@@ -165,3 +165,73 @@ zig, and the full verification gate passes.
 
 Phase 2 (cleanup: retiring the `TMP_*` globals, replacing raw pointers with safe
 abstractions, renaming identified functions) is a separate effort with its own spec.
+
+## Layer 0 outcome
+
+Measured against the baseline above (3,392 lines, 92 function definitions across
+`c_src/main.c`, `part_defs.c` and `draw_rope.c`):
+
+* **37 functions (781 lines) moved to Rust.** `c_src/` is down to 55 function definitions
+  in 2,611 lines across those three files (`main.c` 1,922/44, `part_defs.c` 590/10,
+  `draw_rope.c` 99/1). `cat c_src/*.c | wc -l` reports 2,614 — that total also includes the
+  1-line `globals.c` placeholder left after Task 2 moved the 39 globals to
+  `src/globals.rs`, and an unrelated 2-line `foo.c` fixture.
+* **Four functions were identified for the first time** via the Ghidra setup from Task 5,
+  recorded in full in `docs/reverse-engineering-setup.md`: `stub_1050_025e` →
+  `set_bounce_side_flags`, `stub_10a8_4509` → `llama2_insert_by_force`, `stub_10a8_2bea` →
+  `queue_dirty_rect`, and `stub_10a8_28f6` → `queue_rope_dirty_rects`. The latter two are
+  **deliberate no-ops** in the Rust port: Ghidra's decompilation showed the originals were
+  not stubs at all but real dirty-rectangle bookkeeping for the legacy GDI blitter (queuing
+  and deduplicating screen-space redraw rectangles as ropes and other parts moved). That
+  logic has no effect on simulation state — it only fed a renderer that no longer exists,
+  since this project's software rasterizer repaints every frame unconditionally. The C
+  bodies were already no-ops for exactly this reason, and the Rust ports preserve that.
+
+### The verification gap
+
+The test gate (`scripts/verify.sh`) exercises exactly **7 of the 87 shipped levels**
+(`L6`, `L20`, `L21`, `L24`, `L25`, `L31`, `L79`) at **4 tick counts** (0, 30, 120, 300).
+That is a real but narrow slice of the simulation, and several functions ported in layer 0
+are **not exercised by it at all** — their correctness rests on transliteration care and
+code review, not on the gate having actually run them. Known unexercised functions:
+
+* `teeter_totter_helper_1`
+* `rope_calculate_flags` (probably — no loadable level's rope/pulley configuration has been
+  confirmed to reach every branch)
+* the design-mode branch of `part_set_prev_vars` (guarded by `LEVEL_STATE == 0x1000`,
+  which headless simulation runs never enter)
+* `balloon_rope`
+* `teeter_totter_helper_get_part_speed`
+* `generate_hypot_samples` (dead code in every build — the original's own callers are
+  commented out in `c_src/draw_rope.c`, and nothing calls the Rust port either)
+* the three `UNIMPLEMENTED` stubs (`stub_10a8_1329`, `stub_10a8_28a5`, `stub_10a8_0880`),
+  which panic if ever called and are only proven never to be called by the 7 loadable
+  levels, not by any broader guarantee
+
+This gap **widens in later layers**, not shrinks. Much of `part_defs.c` implements parts
+(electrical components, weapons, characters) that no currently loadable level contains, so
+layers 1-6 will move progressively more code the gate cannot see running at all. The
+direct way to close the gap is to widen level coverage — every additional part type
+implemented (see the README status table) turns levels that currently fail to load into
+levels the gate can add to its rotation, which is a strictly better source of confidence
+than code review alone.
+
+### What the gate gained during layer 0
+
+Later layers depend on infrastructure the gate did not have before this phase:
+
+* **Golden baselines** in `tests/baselines/` (28 files: 7 levels × 4 tick counts),
+  captured from known-good pre-port code. These catch a port that computes the wrong
+  answer identically in every build configuration, which a debug/release/wasm comparison
+  alone cannot see.
+* **A C compiler diagnostics check** that fails the gate on
+  `-Wimplicit-function-declaration` or `-Wincompatible-pointer-types` from the system
+  compiler. Both warning classes indicate real C type errors that `cc-rs` compiles anyway
+  without failing `cargo build`, so they were previously invisible to normal development.
+* **A TIMWIN-tag completeness check** that fails the gate if any exported
+  `#[no_mangle] pub extern "C" fn` in `src/tim_c.rs` lacks its own `TIMWIN:` provenance
+  comment (against a small, manually-audited allowlist of project-infrastructure exports
+  that were never part of the original TIM code). This was added after the tag went
+  missing silently twice, when a new doc comment was written directly under a previous
+  function's doc comment with no blank line between them and rustdoc merged both `///`
+  blocks onto the second function.
