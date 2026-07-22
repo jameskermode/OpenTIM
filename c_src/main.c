@@ -791,21 +791,7 @@ int stub_1050_0550(bool some_bool) {
     return found;
 }
 
-/* TIMWIN: 10a8:03ac */
-bool should_parts_skip_collision(enum PartType a, enum PartType b) {
-    // Checks if the two part types are a set of any two specific parts, regardless of order.
-
-    #define CHK(x, y) ((a == x && b == y) || (b == x && a == y))
-
-    if (CHK(P_POKEY_THE_CAT, P_MORT_THE_MOUSE)) return 1;
-    if (CHK(P_MORT_THE_MOUSE, P_CHEESE)) return 1;
-    if (CHK(P_MEL_SCHLEMMING, P_MELS_HOUSE)) return 1;
-    if (CHK(P_MEL_SCHLEMMING, P_MEL_SCHLEMMING)) return 1;
-
-    #undef CHK
-
-    return 0;
-}
+// should_parts_skip_collision has moved to Rust (src/tim_c.rs).
 
 /* TIMWIN: 10a8:0555 */
 bool part_borders_intersect(const struct Part *part1, const struct Part *part2) {

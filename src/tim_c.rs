@@ -729,6 +729,34 @@ pub extern "C" fn get_first_part(choice: c_int) -> *mut Part {
 /// loop condition (mirroring the C macro's `varname != 0` loop test), so every node visited
 /// is guaranteed live. `contains` is only ever compared by pointer value, never
 /// dereferenced, so it may safely be null.
+/// TIMWIN: 10a8:03ac
+///
+/// Safety: no pointer is ever touched here. `a` and `b` are plain `enum PartType` values
+/// passed by value (a bare C enum here is a 4-byte value, not a pointer), matching the C
+/// signature exactly, so there is no null path to preserve.
+#[no_mangle]
+pub extern "C" fn should_parts_skip_collision(a: c_int, b: c_int) -> bool {
+    // Checks if the two part types are a set of any two specific parts, regardless of order.
+    let a = PartType::from_u16(a as u16);
+    let b = PartType::from_u16(b as u16);
+    let chk = |x: PartType, y: PartType| (a == x && b == y) || (b == x && a == y);
+
+    if chk(PartType::PokeyTheCat, PartType::MortTheMouse) {
+        return true;
+    }
+    if chk(PartType::MortTheMouse, PartType::Cheese) {
+        return true;
+    }
+    if chk(PartType::MelSchlemming, PartType::MelsHouse) {
+        return true;
+    }
+    if chk(PartType::MelSchlemming, PartType::MelSchlemming) {
+        return true;
+    }
+
+    false
+}
+
 #[no_mangle]
 pub extern "C" fn bucket_contains(bucket: *mut Part, contains: *mut Part) -> bool {
     unsafe {

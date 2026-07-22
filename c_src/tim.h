@@ -102,6 +102,7 @@ u16 quadrant_from_angle(u16 angle);
 bool bucket_contains(struct Part *bucket, struct Part *contains);
 void tmp_3a6a_update_vars(void);
 void four_points_adjust_p1_by_one(struct Line *points);
+bool should_parts_skip_collision(enum PartType a, enum PartType b);
 
 #define EACH_STATIC_PART(varname) for (struct Part *varname = STATIC_PARTS_ROOT.next; varname != 0; varname = varname->next)
 #define EACH_MOVING_PART(varname) for (struct Part *varname = MOVING_PARTS_ROOT.next; varname != 0; varname = varname->next)
