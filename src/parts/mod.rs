@@ -400,6 +400,32 @@ mod teeter_totter {
         reset(part);
     }
 
+    /// TIMWIN: 10d0:0731
+    ///
+    /// Safety: `part` is dereferenced unconditionally to read `part_type`, exactly matching
+    /// the C (`part->type`, no null check). This is still called directly from the C
+    /// `teeter_totter_run` (not yet ported), so every caller passes a live, currently
+    /// simulated `Part`, same as before the port.
+    #[no_mangle]
+    pub extern "C" fn teeter_totter_helper_get_part_speed(part: *mut Part) -> i16 {
+        let mass = unsafe { tim_c::part_mass((*part).part_type as c_int) } as i16;
+        if mass < 2 {
+            0x1c00
+        } else if mass < 6 {
+            0x1a00
+        } else if mass < 10 {
+            0x1800
+        } else if mass < 21 {
+            0x1600
+        } else if mass < 121 {
+            0x1400
+        } else if mass < 151 {
+            0x1200
+        } else {
+            0x1000
+        }
+    }
+
     // TIMWIN: 10d0:0240
     fn run(part: &mut Part) {
         run_c!(teeter_totter_run, part);

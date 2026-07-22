@@ -260,30 +260,6 @@ int teeter_totter_helper_2(struct Part *exclude_part, struct Part *part, u16 fla
     return 0;
 }
 
-/* TIMWIN: 10d0:0731 */
-s16 teeter_totter_helper_get_part_speed(struct Part *part) {
-    s16 mass = part_mass(part->type);
-    if (mass < 2) {
-        return 0x1c00;
-    }
-    if (mass < 6) {
-        return 0x1a00;
-    }
-    if (mass < 10) {
-        return 0x1800;
-    }
-    if (mass < 21) {
-        return 0x1600;
-    }
-    if (mass < 121) {
-        return 0x1400;
-    }
-    if (mass < 151) {
-        return 0x1200;
-    }
-    return 0x1000;
-}
-
 /* TIMWIN: 1090:1289 */
 void stub_1090_1289(struct Part *teeter_part, enum GetPartsFlags choice, const struct Line *line) {
     teeter_part->interactions = 0;
