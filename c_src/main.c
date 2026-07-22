@@ -148,16 +148,7 @@ struct Part* next_part_or_fallback(struct Part *part, int choice) {
 
 // belt_data_alloc and rope_data_alloc have moved to Rust (src/tim_c.rs).
 
-// part_init_rope_data_primary has moved to Rust (src/tim_c.rs).
-
-void part_init_belt_data(struct Part *part) {
-    struct BeltData *belt = belt_data_alloc();
-    part->belt_data = belt;
-    if (!belt) {
-        return;
-    }
-    belt->belt_part = part;
-}
+// part_init_rope_data_primary and part_init_belt_data have moved to Rust (src/tim_c.rs).
 
 /* TIMWIN: 1078:00f2 */
 struct Part* part_new(enum PartType type) {

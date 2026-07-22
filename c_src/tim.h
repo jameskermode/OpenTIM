@@ -100,6 +100,7 @@ void part_alloc_borders(struct Part *part, u16 length);
 struct BeltData* belt_data_alloc();
 struct RopeData* rope_data_alloc();
 void part_init_rope_data_primary(struct Part *part);
+void part_init_belt_data(struct Part *part);
 size_t debug_part_size();
 void remove_part_from_linked_list(struct Part *part);
 struct Part* get_first_part(int choice);

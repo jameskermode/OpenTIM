@@ -8,7 +8,6 @@ use crate::parts;
 /**** Import C declarations to Rust ****/
 extern {
     pub fn part_new(part_type: c_int) -> *mut Part;
-    pub fn part_init_belt_data(part: *mut Part);
     pub fn part_calculate_border_normals(part: *mut Part);
     pub fn part_set_size_and_pos_render(part: *mut Part);
     pub fn restore_parts_state_from_design();
@@ -207,6 +206,25 @@ pub extern "C" fn part_init_rope_data_primary(part: *mut Part) {
             return;
         }
         (*rope).rope_or_pulley_part = part;
+    }
+}
+
+/// See `part_init_rope_data_primary` immediately above for why this has no `TIMWIN` tag and
+/// is exempted in `scripts/verify.sh`'s `TIMWIN_ALLOWLIST`.
+///
+/// Safety: `part` is dereferenced unconditionally to store `belt`, matching the C (no null
+/// check on `part` there either). `belt` (the result of `belt_data_alloc`) is null-checked
+/// before being dereferenced to set `belt_part`, exactly matching the C's `if (!belt) {
+/// return; }` guard, so the null-allocation-failure path never dereferences the null pointer.
+#[no_mangle]
+pub extern "C" fn part_init_belt_data(part: *mut Part) {
+    unsafe {
+        let belt = belt_data_alloc();
+        (*part).belt_data = belt;
+        if belt.is_null() {
+            return;
+        }
+        (*belt).belt_part = part;
     }
 }
 

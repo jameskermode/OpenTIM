@@ -108,7 +108,7 @@ TIMWIN_SOURCES="src/tim_c.rs src/parts/mod.rs src/wasm_libc.rs"
 TIMWIN_ALLOWLIST="unimplemented output_c output_part_c output_int_c arctan_c sine_c \
 cosine_c rotate_point_c calculate_line_intersection calculate_line_intersection_helper \
 belt_data_alloc rope_data_alloc part_alloc_borders part_free_borders \
-part_init_rope_data_primary debug_part_size \
+part_init_rope_data_primary part_init_belt_data debug_part_size \
 part_image_size part_density part_mass \
 part_bounciness part_friction part_order part_data30_flags1 part_data30_flags3 \
 part_data30_size_something2 part_data30_size part_data31_render_pos_offset \
