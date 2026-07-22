@@ -4,7 +4,6 @@
 #include "tim.h"
 
 u16 arctan_c(s32 dx, s32 dy);
-u16 rope_calculate_flags(struct RopeData *rope, int param_2, int param_3);
 bool calculate_line_intersection_helper(s16 a, s16 b, s16 c);
 bool calculate_line_intersection(const struct Line *a, const struct Line *b, struct ShortVec *out);
 bool part_image_size(enum PartType type, u16 index, struct ShortVec *size_out);

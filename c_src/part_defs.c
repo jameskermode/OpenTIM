@@ -157,65 +157,7 @@ enum RopeFlags {
 };
 */
 
-/* TIMWIN: 10a8:376e
-   Note: I double-checked this for accuracy */
-u16 rope_calculate_flags(struct RopeData *rope, int param_2, int param_3) {
-    struct Part *local14;
-    byte bvar1, bvar2;
-    struct Part *ppvar4;
-
-    if (param_2 == 0) {
-        local14 = rope->part1;
-        bvar1 = rope->part1_rope_slot;
-        ppvar4 = rope->part2;
-        bvar2 = rope->part2_rope_slot;
-    } else {
-        local14 = rope->part2;
-        bvar1 = rope->part2_rope_slot;
-        ppvar4 = rope->part1;
-        bvar2 = rope->part1_rope_slot;
-    }
-
-    u16 local6 = bvar1;
-    u16 local8 = bvar2;
-    struct Part *ppvar3 = local14->links_to[local6];
-
-    struct RopeData *local10;
-    struct RopeData *local12;
-    if (ppvar3 == ppvar4) {
-        local12 = rope;
-        local10 = rope;
-    } else {
-        local10 = ppvar3->rope_data[0];
-        local12 = ppvar4->links_to[local8]->rope_data[0];
-    }
-
-    u16 flags;
-
-    if (local12->ends_pos[param_2].x < rope->ends_pos[1 - param_2].x) {
-        flags = 0x0008;
-    } else {
-        flags = 0x0010;
-    }
-
-    if (param_3 != 0) {
-        if (rope->ends_pos[param_2].y < local10->ends_pos[1 - param_2].y) {
-            return 0x0001;
-        } else if (rope->ends_pos[1 - param_2].y < local12->ends_pos[param_2].y) {
-            return flags | 0x0004;
-        } else {
-            return flags | 0x0002;
-        }
-    } else {
-        if (rope->ends_pos[param_2].y > local10->ends_pos[1 - param_2].y) {
-            return 0x0001;
-        } else if (rope->ends_pos[1 - param_2].y > local12->ends_pos[param_2].y) {
-            return flags | 0x0002;
-        } else {
-            return flags | 0x0004;
-        }
-    }
-}
+// rope_calculate_flags: implemented in Rust (src/tim_c.rs); prototyped in tim.h.
 
 /* TIMWIN: 10d0:0627 */
 int teeter_totter_helper_2(struct Part *exclude_part, struct Part *part, u16 flags, s16 mass, s32 force) {

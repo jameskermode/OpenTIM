@@ -1786,6 +1786,88 @@ pub extern "C" fn approximate_hypot_of_rope(
     }
 }
 
+/// TIMWIN: 10a8:376e
+/// Note: I double-checked this for accuracy
+///
+/// Safety: `rope` is dereferenced unconditionally throughout, exactly matching the C
+/// (`rope->part1`, etc., no null check anywhere in the original). `local14`
+/// (`rope->part1`/`rope->part2`) is dereferenced unconditionally to index `links_to`, matching
+/// the C's unchecked `local14->links_to[local6]`. When `ppvar3 != ppvar4`, both `ppvar3` and
+/// `ppvar4->links_to[local8]` are dereferenced unconditionally to read `rope_data[0]`
+/// (`local10`/`local12`), matching the C's unchecked `ppvar3->rope_data[0]` /
+/// `ppvar4->links_to[local8]->rope_data[0]`; every caller passes a fully-linked rope, the same
+/// invariant the C relied on. Finally `local12` (always non-null via one of the two branches
+/// above) is dereferenced to read `ends_pos`, again with no null check, matching the C.
+///
+/// `local6`/`local8` (`byte` rope slots, always 0 or 1) and `param_2` (always 0 or 1, per every
+/// caller) are used directly as `links_to`/`ends_pos` array indices, matching the C's unchecked
+/// array subscripting; `1 - param_2` is computed in `i32` exactly as C promotes the `int`
+/// parameter, then used as the paired index (0 when `param_2` is 1, 1 when `param_2` is 0).
+#[no_mangle]
+pub extern "C" fn rope_calculate_flags(rope: *mut RopeData, param_2: c_int, param_3: c_int) -> u16 {
+    unsafe {
+        let local14: *mut Part;
+        let bvar1: u8;
+        let ppvar4: *mut Part;
+        let bvar2: u8;
+
+        if param_2 == 0 {
+            local14 = (*rope).part1;
+            bvar1 = (*rope).part1_rope_slot;
+            ppvar4 = (*rope).part2;
+            bvar2 = (*rope).part2_rope_slot;
+        } else {
+            local14 = (*rope).part2;
+            bvar1 = (*rope).part2_rope_slot;
+            ppvar4 = (*rope).part1;
+            bvar2 = (*rope).part1_rope_slot;
+        }
+
+        let local6 = bvar1 as usize;
+        let local8 = bvar2 as usize;
+        let ppvar3 = (*local14).links_to[local6];
+
+        let local10: *mut RopeData;
+        let local12: *mut RopeData;
+        if ppvar3 == ppvar4 {
+            local12 = rope;
+            local10 = rope;
+        } else {
+            local10 = (*ppvar3).rope_data[0];
+            local12 = (*(*ppvar4).links_to[local8]).rope_data[0];
+        }
+
+        let other_idx = (1 - param_2) as usize;
+        let param_2_idx = param_2 as usize;
+
+        let flags: u16;
+
+        if (*local12).ends_pos[param_2_idx].x < (*rope).ends_pos[other_idx].x {
+            flags = 0x0008;
+        } else {
+            flags = 0x0010;
+        }
+
+        if param_3 != 0 {
+            if (*rope).ends_pos[param_2_idx].y < (*local10).ends_pos[other_idx].y {
+                0x0001
+            } else if (*rope).ends_pos[other_idx].y < (*local12).ends_pos[param_2_idx].y {
+                flags | 0x0004
+            } else {
+                flags | 0x0002
+            }
+        } else {
+            if (*rope).ends_pos[param_2_idx].y > (*local10).ends_pos[other_idx].y {
+                0x0001
+            } else if (*rope).ends_pos[other_idx].y > (*local12).ends_pos[param_2_idx].y {
+                flags | 0x0002
+            } else {
+                flags | 0x0004
+            }
+        }
+    }
+}
+
 // `rand` is only needed by `generate_hypot_samples` below, which (like the C original) is dead
 // code never compiled into a shipped build. It is deliberately NOT declared for wasm32: the
 // wasm shim (`src/wasm_libc.rs`) never provided a `rand` either, for the same reason -- the C

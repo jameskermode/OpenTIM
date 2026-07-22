@@ -118,6 +118,7 @@ s16 distance_to_rope_link(struct RopeData *rope, struct Part *part, s16 *out_x, 
 void bucket_handle_contained_parts(struct Part *bucket);
 void belt_set_four_pos(struct BeltData *belt);
 void part_set_prev_vars(struct Part *part);
+u16 rope_calculate_flags(struct RopeData *rope, int param_2, int param_3);
 
 #define EACH_STATIC_PART(varname) for (struct Part *varname = STATIC_PARTS_ROOT.next; varname != 0; varname = varname->next)
 #define EACH_MOVING_PART(varname) for (struct Part *varname = MOVING_PARTS_ROOT.next; varname != 0; varname = varname->next)
