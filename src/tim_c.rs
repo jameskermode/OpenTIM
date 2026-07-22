@@ -7,7 +7,6 @@ use crate::parts;
 
 /**** Import C declarations to Rust ****/
 extern {
-    pub fn initialize_llamas();
     pub fn part_new(part_type: c_int) -> *mut Part;
     pub fn part_init_rope_data_primary(part: *mut Part);
     pub fn part_init_belt_data(part: *mut Part);
@@ -33,8 +32,14 @@ extern {
 // rather than Rust's `dealloc` (which would reconstruct a `Layout` the allocator that made
 // the memory never used). Import `free` itself rather than moving `part_alloc_borders` /
 // `part_free_borders`.
+//
+// `initialize_llamas` (below) uses the same libc `malloc`/`free` pair for `struct Llama`
+// nodes, for the same reason: other still-C code (e.g. `stub_10a8_4509`) walks and reorders
+// those same nodes and expects to be able to free ones it never allocated, and vice versa,
+// so every `Llama` allocation anywhere must go through this one allocator.
 extern "C" {
     fn free(ptr: *mut std::os::raw::c_void);
+    fn malloc(size: usize) -> *mut std::os::raw::c_void;
 }
 
 /// TIMWIN: 1078:00f2 (allocation half)
@@ -144,6 +149,58 @@ pub extern "C" fn remove_part_from_linked_list(part: *mut Part) {
         (*(*part).prev).next = (*part).next;
         if !(*part).next.is_null() {
             (*(*part).next).prev = (*part).prev;
+        }
+    }
+}
+
+/// Partial from TIMWIN: 10b0:02a5
+///
+/// Safety: `struct Llama` (`c_src/globals.rs`) nodes are allocated and freed here with libc
+/// `malloc`/`free`, matching the C exactly. This is required, not just preserved-for-its-own-
+/// sake: other C code (e.g. `stub_10a8_4509`) still walks and reorders `LLAMA_1`/`LLAMA_2`
+/// nodes, moving them between the two lists without allocating or freeing them itself, so
+/// whichever allocator creates a node must be the same one every other piece of code (C or
+/// Rust) that might eventually free it uses -- mixing in Rust's `std::alloc`/`dealloc` here
+/// would corrupt the heap the first time C code freed (or this function re-freed) a node
+/// allocated by the other side. Both the free and the (re-)allocation for these nodes happen
+/// in this single function, so there is no cross-allocator split to worry about.
+///
+/// The two cleanup loops walk `LLAMA_1`/`LLAMA_2` from their current heads, freeing every
+/// reachable node: `cur->next` is read into `next` *before* `cur` is freed, exactly matching
+/// the C's `struct Llama *next = cur->next; free(cur); cur = next;`, so freed memory is never
+/// read again. This is sound as long as `LLAMA_1`/`LLAMA_2` form well-formed, non-cyclic
+/// singly linked lists of live `malloc`'d nodes -- the same invariant the C relied on and
+/// every other list-mutating function here preserves.
+///
+/// The final loop allocates 20 fresh nodes with `malloc` and unconditionally writes
+/// `(*o).next = LLAMA_1` with no null check on `o`, exactly matching the C (`o->next =
+/// LLAMA_1;` right after `malloc`, with no check on its result either). A `malloc` failure
+/// here dereferences null in both languages equally; that is a preexisting property of the
+/// C being ported, not a regression introduced by this port.
+#[no_mangle]
+pub extern "C" fn initialize_llamas() {
+    unsafe {
+        // Release any llamas from a previously loaded level. Without this, loading a second
+        // level leaks the whole pool and leaves LLAMA_2 pointing at freed parts.
+        let mut cur = crate::globals::LLAMA_1;
+        while !cur.is_null() {
+            let next = (*cur).next;
+            free(cur as *mut std::os::raw::c_void);
+            cur = next;
+        }
+        let mut cur = crate::globals::LLAMA_2;
+        while !cur.is_null() {
+            let next = (*cur).next;
+            free(cur as *mut std::os::raw::c_void);
+            cur = next;
+        }
+
+        crate::globals::LLAMA_1 = std::ptr::null_mut();
+        crate::globals::LLAMA_2 = std::ptr::null_mut();
+        for _ in 0..20 {
+            let o = malloc(std::mem::size_of::<crate::globals::Llama>()) as *mut crate::globals::Llama;
+            (*o).next = crate::globals::LLAMA_1;
+            crate::globals::LLAMA_1 = o;
         }
     }
 }

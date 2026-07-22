@@ -11,11 +11,17 @@
 
 use crate::tim_c::Part;
 
-/// Opaque stand-in for `struct Llama` (`c_src/tim.h`). Nothing on the Rust side reads or
-/// writes through this pointer yet -- it is only ever passed between C functions -- so an
-/// uninhabited type is enough to give `LLAMA_1`/`LLAMA_2` the right pointer type without
-/// duplicating the C struct layout.
-pub enum Llama {}
+/// Concrete layout for `struct Llama` (`c_src/tim.h`), field-for-field, so pointers shared
+/// with the still-C code (which walks/reorders these same nodes through `struct Llama *`)
+/// see an identical memory layout. `initialize_llamas` (src/tim_c.rs) is the only code that
+/// allocates or frees these nodes, and it does so with libc `malloc`/`free` rather than
+/// Rust's allocator, since other C code still frees/reads nodes it never touched.
+#[repr(C)]
+pub struct Llama {
+    pub next: *mut Llama,
+    pub part: *mut Part,
+    pub force: i32,
+}
 
 /// A signature matching `void (*)(struct Part *)` (`c_src/tim.h`), the type of `MEL_JUMPY`.
 /// `Option<unsafe extern "C" fn(..)>` has the same representation as the bare function
