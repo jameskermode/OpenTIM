@@ -121,6 +121,13 @@ The project is mid-migration: `c_src/` is a fairly direct transliteration of the
 
 C walks them with the `EACH_STATIC_PART` / `EACH_MOVING_PART` / `EACH_INTERACION` macros in `c_src/tim.h`; Rust walks them with `tim_c::static_parts_iter()` / `moving_parts_iter()` (and `_mut` variants). All of it is `unsafe` by nature — the lists mutate during iteration in the original's algorithms.
 
+Because the world lives in globals, **loading a level must first tear down the previous
+one** — `lib.rs::clear_level()` does this and `load_level` calls it. Nothing else empties
+the lists, so skipping it silently accumulates parts across loads. `part_free` owns the
+rules about what to release: borders always, belt data unless `F2_0001` marks it shared,
+and `rope_data[0]` only for ropes and pulleys since everything else just points at a rope
+owned elsewhere.
+
 `src/tim_c.rs` is the entire FFI boundary:
 - an `extern` block importing C functions and globals (`advance_parts`, `part_new`, `GRAVITY`, `AIR_PRESSURE`, the list roots…),
 - `#[no_mangle]` Rust functions that C calls back into (`part_mass`, `part_run`, `part_bounce`, `part_data30_flags1`, `sine_c`, …), declared C-side in `c_src/tim.h`,

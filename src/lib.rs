@@ -86,6 +86,34 @@ pub fn read_level_bytes(resources: &mut Resources, name: &str) -> Result<Vec<u8>
     }
 }
 
+/// Free every part in the world and empty the three part lists.
+///
+/// The C core keeps the world in global linked lists which nothing else ever empties, so
+/// without this a second `load_level` adds to the first instead of replacing it.
+///
+/// Freeing is left to `part_free`, which knows the ownership rules: border points always
+/// belong to the part, belt data belongs to it unless `F2_0001` marks the copy as shared,
+/// and `rope_data[0]` is only owned by ropes and pulleys because everything else merely
+/// points at a rope owned elsewhere.
+pub fn clear_level() {
+    unsafe {
+        for root in [
+            std::ptr::addr_of_mut!(tim_c::STATIC_PARTS_ROOT),
+            std::ptr::addr_of_mut!(tim_c::MOVING_PARTS_ROOT),
+            std::ptr::addr_of_mut!(tim_c::PARTS_BIN_ROOT),
+        ] {
+            let mut cur = (*root).next;
+            while !cur.is_null() {
+                let next = (*cur).next;
+                tim_c::part_free(cur);
+                cur = next;
+            }
+            (*root).next = std::ptr::null_mut();
+            (*root).prev = std::ptr::null_mut();
+        }
+    }
+}
+
 /// Parse a level and install it into the simulation's global part lists.
 ///
 /// The C core keeps the world in global linked lists, so only one level can be loaded at
@@ -93,6 +121,9 @@ pub fn read_level_bytes(resources: &mut Resources, name: &str) -> Result<Vec<u8>
 pub fn load_level(buf: &[u8], freeform: bool) -> Result<level_file_format::Level, Box<dyn std::error::Error>> {
     let level_opts = level_file_format::GameOptions::Tim { freeform_mode: freeform };
     let level = level_file_format::read(buf, &level_opts)?;
+
+    // Discard the previous world first; the part lists are global and persist otherwise.
+    clear_level();
 
     unsafe {
         tim_c::initialize_llamas();

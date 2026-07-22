@@ -92,6 +92,19 @@ void insert_part_into_parts_bin(struct Part *part) {
 
 /* Partial from TIMWIN: 10b0:02a5 */
 void initialize_llamas() {
+    // Release any llamas from a previously loaded level. Without this, loading a second
+    // level leaks the whole pool and leaves LLAMA_2 pointing at freed parts.
+    for (struct Llama *cur = LLAMA_1; cur != 0; ) {
+        struct Llama *next = cur->next;
+        free(cur);
+        cur = next;
+    }
+    for (struct Llama *cur = LLAMA_2; cur != 0; ) {
+        struct Llama *next = cur->next;
+        free(cur);
+        cur = next;
+    }
+
     LLAMA_1 = 0;
     LLAMA_2 = 0;
     for (int i = 0; i < 20; i++) {
