@@ -153,55 +153,8 @@ void stub_1090_1289(struct Part *teeter_part, enum GetPartsFlags choice, const s
 // implemented in Rust
 void teeter_totter_reset(struct Part *part);
 
-/* TIMWIN: 10d0:0000 */
-int teeter_totter_bounce(struct Part *part) {
-    if (ANY_FLAGS(part->bounce_part->flags2, 0x0200)) {
-        return 1;
-    }
-
-    u16 idx = part->bounce_border_index;
-    s16 new_state2 = 1;
-
-    if (idx == 0) {
-        s16 ivar3 = part->pos.x + (part->size.x>>1) - part->bounce_part->pos.x;
-        if (ivar3 < 44) {
-            if (ivar3 >= 37) {
-                return 1;
-            }
-            if (part->bounce_part->state1 == 0) {
-                return 1;
-            }
-            new_state2 = -1;
-        } else {
-            if (part->bounce_part->state1 == 2) {
-                return 1;
-            }
-            new_state2 = 1;
-        }
-    } else if (idx == 2) {
-        if (part->bounce_part->state1 == 0) {
-            return 1;
-        }
-        new_state2 = -1;
-    } else if (idx == 6) {
-        if (part->bounce_part->state1 == 2) {
-            return 1;
-        }
-        new_state2 = 1;
-    } else {
-        return 1;
-    }
-
-    if (llama2_insert_by_force(part, part->bounce_part) == 0) {
-        return 1;
-    }
-
-    part->bounce_part->state2 = new_state2;
-    part->bounce_part->force = part->force;
-    part->bounce_part = 0;
-
-    return 0;
-}
+// teeter_totter_bounce: implemented in Rust (src/parts/mod.rs, mod teeter_totter);
+// prototyped in tim.h.
 
 /* TIMWIN: 10d0:0240 */
 void teeter_totter_run(struct Part *part) {

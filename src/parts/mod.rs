@@ -595,6 +595,75 @@ mod teeter_totter {
         }
     }
 
+    /// TIMWIN: 10d0:0000
+    ///
+    /// Safety: `part` and `part.bounce_part` are dereferenced unconditionally, exactly
+    /// matching the C (`part->bounce_part->flags2`, `part->pos.x`, etc., with no null check
+    /// anywhere in the original). Every caller already must supply a live `part` with a live
+    /// `bounce_part`, the same precondition the original C carried.
+    ///
+    /// `ivar3` is computed in `i32` (mirroring C's promotion of the `s16` operands to `int` for
+    /// `+`/`-`/`>>`) and then truncated back to `i16` on assignment, matching C's implicit
+    /// narrowing conversion to the declared `s16` local.
+    ///
+    /// The only other function called is `llama2_insert_by_force`, which is Rust-implemented
+    /// (`tim_c::llama2_insert_by_force`), so this function calls no C function, remaining a
+    /// leaf.
+    #[no_mangle]
+    pub extern "C" fn teeter_totter_bounce(part: *mut Part) -> c_int {
+        unsafe {
+            let bounce_part = (*part).bounce_part;
+
+            if (*bounce_part).flags2 & 0x0200 != 0 {
+                return 1;
+            }
+
+            let idx = (*part).bounce_border_index;
+            let mut new_state2: i16 = 1;
+
+            if idx == 0 {
+                let ivar3 = ((*part).pos.x as i32 + (((*part).size.x as i32) >> 1)
+                    - (*bounce_part).pos.x as i32) as i16;
+                if ivar3 < 44 {
+                    if ivar3 >= 37 {
+                        return 1;
+                    }
+                    if (*bounce_part).state1 == 0 {
+                        return 1;
+                    }
+                    new_state2 = -1;
+                } else {
+                    if (*bounce_part).state1 == 2 {
+                        return 1;
+                    }
+                    new_state2 = 1;
+                }
+            } else if idx == 2 {
+                if (*bounce_part).state1 == 0 {
+                    return 1;
+                }
+                new_state2 = -1;
+            } else if idx == 6 {
+                if (*bounce_part).state1 == 2 {
+                    return 1;
+                }
+                new_state2 = 1;
+            } else {
+                return 1;
+            }
+
+            if tim_c::llama2_insert_by_force(part, bounce_part) == 0 {
+                return 1;
+            }
+
+            (*bounce_part).state2 = new_state2;
+            (*bounce_part).force = (*part).force;
+            (*part).bounce_part = std::ptr::null_mut();
+
+            0
+        }
+    }
+
     // TIMWIN: 10d0:0240
     fn run(part: &mut Part) {
         run_c!(teeter_totter_run, part);
@@ -602,7 +671,7 @@ mod teeter_totter {
 
     // TIMWIN: 10d0:0000
     fn bounce(part: &mut Part) -> bool {
-        bounce_c!(teeter_totter_bounce, part);
+        teeter_totter_bounce(part as *mut Part) != 0
     }
 
     // TIMWIN: 10d0:01db
