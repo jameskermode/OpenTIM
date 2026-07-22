@@ -15,8 +15,6 @@ extern {
     pub fn insert_part_into_parts_bin(part: *mut Part);
 
     pub fn stub_10a8_21cb(part: *mut Part, c: u8);
-    pub fn stub_10a8_2b6d(part: *mut Part, c: c_int);
-    pub fn stub_10a8_280a(part: *mut Part, c: c_int);
     pub fn search_for_interactions(part: *mut Part, choice: c_int, search_x_min: i16, search_x_max: i16, search_y_min: i16, search_y_max: i16);
 }
 
@@ -1578,6 +1576,109 @@ pub extern "C" fn queue_rope_dirty_rects(_part: *mut Part, _unused: c_int) {
     // replaces exactly (no behaviour change).
 }
 
+/// TIMWIN: 10a8:2b6d
+///
+/// Renamed from `stub_10a8_2b6d`. Ghidra's decompile at `10a8:2b6d` matches the C
+/// instruction-for-instruction: given any `part`, dispatch to whichever "queue this part's
+/// on-screen dirty rect(s) for repaint" primitive fits its type -- `stub_10a8_28a5` (belt
+/// dirty rects, still unidentified/`unimplemented!()`) for a `P_BELT`, `queue_rope_dirty_rects`
+/// for a `P_ROPE`, otherwise `queue_dirty_rect` directly over the part's own previous-frame
+/// position/size (itself skipped for certain low-resolution-only part types while in
+/// `SIMULATION_MODE`, per `is_low_res_and_specific_part`). This is the general "mark this
+/// part's previous appearance as needing redraw" entry point, called throughout the codebase
+/// (`c_src/part_defs.c`, `src/parts/mod.rs`) any time a part's rendered geometry changes --
+/// always alongside `stub_10a8_21cb` and `stub_10a8_280a` (renamed to
+/// `queue_dirty_rects_for_attachments`, see below) at the same call sites. Guarded by the
+/// global `SQUIRREL` flag
+/// (always 0 in this port, matching the C, which never sets it either).
+///
+/// Confidence: high on mechanics (Ghidra decompile matches the existing C exactly, and the
+/// name follows the sibling naming this project already established for `queue_dirty_rect`/
+/// `queue_rope_dirty_rects` in task 7); the deeper "why" (what the legacy renderer ultimately
+/// did with a queued dirty rect) was not re-derived here, per those functions' own notes.
+///
+/// Safety: `part` is dereferenced unconditionally, exactly matching the C (no null check there
+/// either); every call site passes a live, currently-processed part. The pointers passed to
+/// `queue_dirty_rect` are taken with `addr_of_mut!` rather than `&mut`, since `queue_dirty_rect`
+/// takes raw pointers and this project's convention keeps FFI pointer plumbing as raw pointers
+/// throughout rather than creating (and then immediately decaying) a unique Rust reference.
+#[no_mangle]
+pub extern "C" fn queue_part_dirty_rects(part: *mut Part, c: c_int) {
+    use std::ptr::addr_of_mut;
+    unsafe {
+        if crate::globals::SQUIRREL != 0 {
+            return;
+        }
+
+        if (*part).part_type == PartType::Belt.to_u16() {
+            stub_10a8_28a5(part, c);
+        } else if (*part).part_type == PartType::Rope.to_u16() {
+            queue_rope_dirty_rects(part, c);
+        } else if !(is_low_res_and_specific_part((*part).part_type as c_int) != 0
+            && crate::globals::LEVEL_STATE == 0x2000 /* SIMULATION_MODE */)
+        {
+            queue_dirty_rect(
+                addr_of_mut!((*part).pos_render_prev1),
+                addr_of_mut!((*part).size_prev1),
+                1,
+                1,
+                0,
+            );
+        }
+    }
+}
+
+/// TIMWIN: 10a8:280a
+///
+/// Renamed from `stub_10a8_280a`. Ghidra's decompile at `10a8:280a` matches the C
+/// instruction-for-instruction: given a `part`, propagate a dirty-rect update to whatever
+/// ropes/belt are attached to it -- for a `P_PULLEY`, the rope hanging from its second rope
+/// slot; otherwise (for any part that is itself neither a `P_BELT` nor a `P_ROPE`) its own
+/// belt (only outside `SIMULATION_MODE`, via the still-unidentified `stub_10a8_28a5`) and
+/// both of its own rope slots. Always called immediately alongside `queue_part_dirty_rects`
+/// (formerly `stub_10a8_2b6d`) and `stub_10a8_21cb` at the same call sites, so this is the
+/// "also mark whatever is attached to this part" half of that trio: when a part that anchors
+/// a rope/belt/pulley moves, its own dirty rect is queued by `queue_part_dirty_rects` while
+/// this function queues the rects for the rope/belt geometry hanging off it.
+///
+/// Confidence: high on mechanics (Ghidra decompile matches the existing C exactly); medium on
+/// the name -- "attachments" is a description of the mechanics (propagating to whatever
+/// `rope_data`/`belt_data` a part references), not a name recovered from the binary itself.
+///
+/// Safety: `part` is dereferenced unconditionally, exactly matching the C (no null check
+/// there either); every call site passes a live, currently-processed part. `rope_data`/
+/// `belt_data` pointers are checked for null before the single dereference each guards,
+/// exactly matching the C's `if (part->rope_data[i])` / `if (part->belt_data)`.
+#[no_mangle]
+pub extern "C" fn queue_dirty_rects_for_attachments(part: *mut Part, c: c_int) {
+    unsafe {
+        if (*part).part_type == PartType::Pulley.to_u16() {
+            let rope1 = (*part).rope_data[1];
+            if !rope1.is_null() {
+                queue_rope_dirty_rects((*rope1).rope_or_pulley_part, c);
+            }
+        } else if (*part).part_type != PartType::Belt.to_u16()
+            && (*part).part_type != PartType::Rope.to_u16()
+        {
+            if crate::globals::LEVEL_STATE != 0x2000 /* SIMULATION_MODE */
+                && !(*part).belt_data.is_null()
+            {
+                stub_10a8_28a5((*(*part).belt_data).belt_part, c);
+            }
+
+            let rope0 = (*part).rope_data[0];
+            if !rope0.is_null() {
+                queue_rope_dirty_rects((*rope0).rope_or_pulley_part, c);
+            }
+
+            let rope1 = (*part).rope_data[1];
+            if !rope1.is_null() {
+                queue_rope_dirty_rects((*rope1).rope_or_pulley_part, c);
+            }
+        }
+    }
+}
+
 /**** Ported UNIMPLEMENTED stubs (still unimplemented; ported to establish the pattern) ****/
 
 /// TIMWIN: 10a8:1329
@@ -1596,6 +1697,80 @@ pub extern "C" fn stub_10a8_28a5(_part: *mut Part, _unused: c_int) {
 #[no_mangle]
 pub extern "C" fn stub_10a8_0880(_a: *mut Part, _b: *mut Part) -> *mut Part {
     unimplemented!("stub_10a8_0880")
+}
+
+/// TIMWIN: 10a8:0ab8
+///
+/// Ghidra's decompile at `10a8:0ab8` matches the existing C instruction-for-instruction,
+/// including the two quirks the C already carries over faithfully rather than introducing:
+/// `somepart->flags1` is read without a null check whenever `stub_10a8_0880`'s result differs
+/// from the just-visited `curpart` (the original binary does exactly the same -- Ghidra shows
+/// no null check there either, see `docs/reverse-engineering-setup.md`), and the loop's
+/// continue/return structure collapses to: skip a result flagged `F1_8000` (but only when
+/// `part` itself is non-null), otherwise prefer the first result with neither `F1_8000` nor
+/// `F3_LOCKED` set, falling back afterwards to the last such flagged/locked result seen across
+/// the whole walk, and finally to `part` itself unless a `P_ROPE` is currently selected (in
+/// which case null is returned instead).
+///
+/// NOT renamed: no confident purpose could be established. It depends entirely on
+/// `stub_10a8_0880` (itself still unidentified and `unimplemented!()` above), and every caller
+/// of this function found in Ghidra (`FUN_1068_070d`, `FUN_1068_09f1`, `FUN_10a8_1329`,
+/// `FUN_10a8_0ba7`) lives in code not yet ported into this project -- `FUN_10a8_1329` is this
+/// project's still-`unimplemented!()` `stub_10a8_1329` above, and the three `1068`-segment
+/// callers have no counterpart anywhere in this codebase at all -- so there is no calling
+/// context here to confirm a name against. This function itself currently has NO callers
+/// anywhere in this codebase either (it was dead code here even before this port, exactly
+/// like `calculate_intersecting_rect` above): it exists only because some not-yet-ported
+/// UI-side code will need it eventually. Not exercised by the gate for the same reason.
+///
+/// Safety: `part` may be null (checked before its first dereference, matching the C). Inside
+/// the loop, `curpart` comes from `get_first_part`/`next_part_or_fallback`, which only ever
+/// yield live parts. `somepart` (the result of `stub_10a8_0880`) is read without a null check
+/// when it differs from `curpart` and `part` is non-null, exactly matching the C's
+/// `ANY_FLAGS(somepart->flags1, ...)` -- this is not a bug introduced here, it is the same
+/// missing null check the original binary has; the short-circuit `&&` below preserves the
+/// exact condition under which that dereference happens (only when `part` is non-null).
+#[no_mangle]
+pub extern "C" fn stub_10a8_0ab8(part: *mut Part) -> *mut Part {
+    unsafe {
+        if !part.is_null() && (*part).flags3 & 0x0040 /* F3_LOCKED */ == 0 {
+            let p = stub_10a8_0880(part, part);
+            if !p.is_null() {
+                return p;
+            }
+        }
+
+        let mut another_part: *mut Part = std::ptr::null_mut();
+
+        const CHOOSE_STATIC_OR_ELSE_MOVING_PART: c_int = 0x3000;
+        const CHOOSE_MOVING_PART: c_int = 0x1000;
+
+        let mut curpart = get_first_part(CHOOSE_STATIC_OR_ELSE_MOVING_PART);
+        while !curpart.is_null() {
+            let somepart = stub_10a8_0880(part, curpart);
+
+            let skip = !part.is_null() && (*somepart).flags1 & 0x8000 /* F1_8000 */ != 0;
+            if !skip && !somepart.is_null() {
+                another_part = somepart;
+                if (*somepart).flags1 & 0x8000 == 0 && (*somepart).flags3 & 0x0040 == 0 {
+                    return somepart;
+                }
+            }
+
+            curpart = next_part_or_fallback(curpart, CHOOSE_MOVING_PART);
+        }
+
+        if !another_part.is_null() {
+            return another_part;
+        }
+
+        let selected = crate::globals::SELECTED_PART;
+        if !selected.is_null() && (*selected).part_type == PartType::Rope.to_u16() {
+            return std::ptr::null_mut();
+        }
+
+        part
+    }
 }
 
 static mut PART_IMAGE_SIZES: Vec<(i16, i16)> = vec![];
@@ -2027,6 +2202,43 @@ pub extern "C" fn is_low_res_and_specific_part(part_type: c_int) -> c_int {
         | PartType::PinballBumper => 1,
 
         _ => 0,
+    }
+}
+
+/// TIMWIN: 10a8:0328
+///
+/// Renamed from `stub_10a8_0328`. Private port of the `static inline` helper of the same name
+/// in `c_src/main.c`; the C copy is left in place because other, still-C code
+/// (`stub_1090_0809`, the bounce-impact velocity response) keeps calling it -- `stub_10a8_0328`
+/// has no external linkage (`static inline`), so unlike every other function in this task it
+/// cannot become a `#[no_mangle] pub extern "C" fn`.
+///
+/// Ghidra's decompile at `10a8:0328` matches the C instruction-for-instruction: it computes
+/// `arctan_c` of the vector from `b`'s bounding-box center (`pos + size/2`) to `a`'s, i.e. the
+/// compass angle from `b`'s center to `a`'s center. Its only caller, `stub_1090_0809`, adds
+/// `0xC000` (a further -90 degree turn) to the result before using it to rotate both colliding
+/// parts' velocities into the collision-normal frame -- this function itself only computes the
+/// raw angle between two part centers; nothing about the `0xC000` bounce-specific rotation is
+/// part of it.
+///
+/// Confidence: high. The disassembly matches the C's arithmetic exactly (same field offsets,
+/// same operand order for x vs. y), and the single call site leaves no ambiguity about what
+/// the two parameters mean.
+///
+/// Safety: `a` and `b` are dereferenced unconditionally, exactly matching the C (no null
+/// checks there either); the only caller passes two live, currently-colliding parts.
+///
+/// Currently unused from Rust (its only caller, `stub_1090_0809`, has not been ported yet), so
+/// this is dead code by design until that caller moves to Rust too -- `#[allow(dead_code)]`
+/// silences the resulting warning rather than that being a sign anything is wrong here.
+#[allow(dead_code)]
+fn angle_between_part_centers(a: *const Part, b: *const Part) -> u16 {
+    unsafe {
+        let dx = ((*a).pos.x as i32 + ((*a).size.x as i32 >> 1))
+            - ((*b).pos.x as i32 + ((*b).size.x as i32 >> 1));
+        let dy = ((*b).pos.y as i32 + ((*b).size.y as i32 >> 1))
+            - ((*a).pos.y as i32 + ((*a).size.y as i32 >> 1));
+        arctan_c(dx, dy)
     }
 }
 

@@ -1137,8 +1137,11 @@ static inline void check_play_bowling_ball_impact_sound(struct Part *part) {
     }
 }
 
-/* TIMWIN: 10a8:0328 */
-static inline u16 stub_10a8_0328(struct Part *a, struct Part *b) {
+/* TIMWIN: 10a8:0328
+   Renamed from stub_10a8_0328. Also ported to Rust as the private function
+   angle_between_part_centers in src/tim_c.rs -- this C copy is kept because it is
+   `static inline` (no external linkage) and stub_1090_0809 below, still C, keeps calling it. */
+static inline u16 angle_between_part_centers(struct Part *a, struct Part *b) {
     return arctan_c((a->pos.x + (a->size.x>>1)) - (b->pos.x + (b->size.x>>1)),
                     (b->pos.y + (b->size.y>>1)) - (a->pos.y + (a->size.y>>1)));
 }
@@ -1162,7 +1165,7 @@ void stub_1090_0809(struct Part *part) {
     s16 x2 = bounce_part->vel_hi_precision.x;
     s16 y2 = bounce_part->vel_hi_precision.y;
 
-    u16 angle = stub_10a8_0328(part, bounce_part) + 0xC000;
+    u16 angle = angle_between_part_centers(part, bounce_part) + 0xC000;
 
     rotate_point_c(&x1, &y1, angle);
     rotate_point_c(&x2, &y2, angle);
@@ -1439,50 +1442,18 @@ void stub_10a8_21cb(struct Part *part, u8 c) {
     }
 }
 
-/* TIMWIN: 10a8:280a */
-void stub_10a8_280a(struct Part *part, int c) {
-    if (part->type == P_PULLEY) {
-        if (part->rope_data[1]) {
-            queue_rope_dirty_rects(part->rope_data[1]->rope_or_pulley_part, c);
-        }
-    } else {
-        if (part->type != P_BELT && part->type != P_ROPE) {
-            if (LEVEL_STATE != SIMULATION_MODE && part->belt_data) {
-                stub_10a8_28a5(part->belt_data->belt_part, c);
-            }
-            if (part->rope_data[0]) {
-                queue_rope_dirty_rects(part->rope_data[0]->rope_or_pulley_part, c);
-            }
-            if (part->rope_data[1]) {
-                queue_rope_dirty_rects(part->rope_data[1]->rope_or_pulley_part, c);
-            }
-        }
-    }
-}
+// stub_10a8_280a has moved to Rust (src/tim_c.rs), renamed to queue_dirty_rects_for_attachments.
 
-/* TIMWIN: 10a8:2b6d */
-void stub_10a8_2b6d(struct Part *part, int c) {
-    if (SQUIRREL != 0) return;
-
-    if (part->type == P_BELT) {
-        stub_10a8_28a5(part, c);
-    } else if (part->type == P_ROPE) {
-        queue_rope_dirty_rects(part, c);
-    } else {
-        if (!(is_low_res_and_specific_part(part->type) && LEVEL_STATE == SIMULATION_MODE)) {
-            queue_dirty_rect(&part->pos_render_prev1, &part->size_prev1, 1, 1, 0);
-        }
-    }
-}
+// stub_10a8_2b6d has moved to Rust (src/tim_c.rs), renamed to queue_part_dirty_rects.
 
 // all_parts_set_prev_vars has moved to Rust (src/tim_c.rs).
 
 /* TIMWIN: 10a8:36f0 */
 void stub_10a8_36f0(struct Part *part) {
     stub_10a8_21cb(part, 1);
-    stub_10a8_280a(part, 1);
+    queue_dirty_rects_for_attachments(part, 1);
     if (part->type != P_ROPE_SEVERED_END) {
-        stub_10a8_2b6d(part, 1);
+        queue_part_dirty_rects(part, 1);
     }
 }
 
@@ -1514,45 +1485,10 @@ void stub_10a8_078e(struct RopeData *rope) {
     rope->original_part1_rope_slot = rope->part1_rope_slot;
     rope->original_part2_rope_slot = rope->part2_rope_slot;
 
-    stub_10a8_2b6d(rope->rope_or_pulley_part, 3);
+    queue_part_dirty_rects(rope->rope_or_pulley_part, 3);
 }
 
-/* TIMWIN: 10a8:0ab8 */
-struct Part* stub_10a8_0ab8(struct Part *part) {
-    if (part && NO_FLAGS(part->flags3, F3_LOCKED)) {
-        struct Part *p = stub_10a8_0880(part, part);
-        if (p) {
-            return p;
-        }
-    }
-
-    struct Part *anotherpart = 0;
-
-    EACH_STATIC_THEN_MOVING_PART(curpart) {
-        struct Part *somepart = stub_10a8_0880(part, curpart);
-
-        if (part && ANY_FLAGS(somepart->flags1, F1_8000)) {
-            continue;
-        }
-
-        if (somepart) {
-            anotherpart = somepart;
-            if (NO_FLAGS(somepart->flags1, F1_8000) && NO_FLAGS(somepart->flags3, F3_LOCKED)) {
-                return somepart;
-            }
-        }
-    }
-
-    if (anotherpart) {
-        return anotherpart;
-    }
-
-    if (SELECTED_PART && SELECTED_PART->type == P_ROPE) {
-        return 0;
-    }
-
-    return part;
-}
+// stub_10a8_0ab8 has moved to Rust (src/tim_c.rs). Not renamed -- see its doc comment there.
 
 /* TIMWIN: 1080:1464 */
 void advance_parts() {

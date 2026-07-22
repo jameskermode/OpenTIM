@@ -318,6 +318,38 @@ in `L6.LEV`/`L31.LEV`/`L79.LEV`). Confirmed by temporarily adding a scratch exam
 (`examples/scratch_partcount.rs`, not committed) that iterates each level's loaded parts and
 prints a `PartType` histogram.
 
+## Task 8: four more `main.c` functions of previously unestablished purpose
+
+Ghidra decompilation of all four addresses below was run against the same validated
+`OpenTIM` project (`pyghidra_dump_task4.py`, throwaway, not committed). All four
+disassemblies matched the existing C 1:1, instruction-for-instruction — no drift was found
+anywhere, unlike Task 7 where two addresses turned out to hide real logic behind a no-op C
+body. Here every C body already reflected the real logic.
+
+| stub | renamed to | confidence | what was established | what remains unknown |
+|---|---|---|---|---|
+| `stub_10a8_0328` | `angle_between_part_centers` | High | Ghidra decompile at `10a8:0328` matches the existing C exactly. Computes `arctan_c` of the vector from `b`'s bounding-box center (`pos + size/2`) to `a`'s. Its only caller, `stub_1090_0809` (bounce-impact velocity response, still C), adds `0xC000` to the result to rotate colliding parts' velocities into the collision-normal frame — a further transformation this function itself has no part in. It is `static inline` (no external linkage), so unlike the other three it was ported as a *private* Rust function (`src/tim_c.rs`) rather than `#[no_mangle] pub extern "C" fn`; the C copy in `c_src/main.c` was kept (renamed to match) because `stub_1090_0809` still calls it and cannot call into Rust code with internal C linkage. | Nothing bounce-specific about the `0xC000` offset or the wider collision-response algorithm was re-derived here; only this one leaf function's own arithmetic was confirmed. |
+| `stub_10a8_2b6d` | `queue_part_dirty_rects` | High (mechanics, confirmed byte-for-byte against Ghidra); medium (deeper "why", as with its siblings below) | Dispatches to whichever "queue this part's on-screen dirty rect(s)" primitive fits `part`'s type: `stub_10a8_28a5` (belt, still unidentified/`unimplemented!()`) for `P_BELT`, `queue_rope_dirty_rects` (task 7) for `P_ROPE`, otherwise `queue_dirty_rect` (task 7) directly. Guarded by the `SQUIRREL` global (always 0 in this port). Follows the naming convention task 7 already established for its two callees. | Same caveat as `queue_dirty_rect`/`queue_rope_dirty_rects` — legacy rendering detail, not simulation-relevant. |
+| `stub_10a8_280a` | `queue_dirty_rects_for_attachments` | High (mechanics); medium (name — "attachments" describes the mechanics, not a name recovered from the binary) | Given a part, propagates a dirty-rect update to whatever ropes/belt are attached to it: for a `P_PULLEY`, the rope hanging from its second rope slot; otherwise (for a part that is itself neither belt nor rope) its own belt (outside `SIMULATION_MODE` only) and both of its own rope slots. Always called immediately alongside `queue_part_dirty_rects` and `stub_10a8_21cb` at the same call sites (`c_src/part_defs.c`, `src/parts/mod.rs`) — the "also mark whatever hangs off this part" half of that trio. | Same caveat as above. |
+| `stub_10a8_0ab8` | *not renamed* | N/A — insufficient evidence | Ghidra decompile at `10a8:0ab8` matches the existing C exactly, including two quirks the C already carried over faithfully rather than introducing: `somepart->flags1` is read without a null check when `stub_10a8_0880`'s result differs from the just-visited part, and the loop's continue/return structure collapses to "skip a result flagged `F1_8000` (only when the input `part` is non-null), otherwise prefer the first result with neither `F1_8000` nor `F3_LOCKED`, falling back to the last such result seen, and finally to `part` itself unless a `P_ROPE` is currently selected". Ported to Rust verbatim (`src/tim_c.rs`), preserving both quirks exactly. | The purpose remains unknown: it depends entirely on `stub_10a8_0880` (itself still unidentified and `unimplemented!()`), and every one of its callers found in Ghidra (`FUN_1068_070d`, `FUN_1068_09f1`, `FUN_10a8_1329`, `FUN_10a8_0ba7`) lives in code not yet ported into this project — `FUN_10a8_1329` is this project's still-`unimplemented!()` `stub_10a8_1329`, and the three `1068`-segment callers (a UI-code segment) have no counterpart here at all. This function itself currently has zero callers anywhere in this codebase either (dead code even before this port, like `calculate_intersecting_rect`), so there was no live calling context to confirm a name against. Keeping `stub_10a8_0ab8` is the honest outcome here. |
+
+Exercised-by-the-gate status was checked by temporary instrumentation (an `eprintln!`/
+`fprintf(stderr, ...)` added to each function, reverted before committing — not left in the
+codebase), rather than by static reasoning alone:
+
+- `queue_part_dirty_rects` and `queue_dirty_rects_for_attachments` are called from
+  `stub_10a8_36f0`, itself called every tick from `advance_parts`'s main per-part loop for any
+  part whose position or `state1` changed since the previous frame — true for essentially any
+  moving part. Confirmed: 28 calls to each during a 30-tick run of `L6.LEV` alone (one of the
+  gate's own `TICKS`/`LEVELS` combinations).
+- `angle_between_part_centers` (the still-C copy, since the Rust copy currently has no caller)
+  is called from `stub_1090_0809` whenever two parts bounce off each other. Confirmed: 0 calls
+  in `L6`/`L20`/`L21`/`L24`/`L25`/`L79` at 300 ticks, but 8 calls in `L31.LEV` at 300 ticks —
+  one of the gate's own level/tick combinations, so it is exercised, just not by every level.
+- `stub_10a8_0ab8` has zero callers anywhere in the current codebase (confirmed by `grep`, not
+  instrumentation — there is nothing to instrument a call site of) and is therefore **not**
+  exercised by the gate at all; it is dead code awaiting a not-yet-ported UI-side caller.
+
 ## Procedure summary (for future identification work)
 
 1. `brew install ghidra` (formula; provides `openjdk@21` too).

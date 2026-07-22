@@ -5,8 +5,6 @@ struct RopeData* rope_data_alloc();
 void part_alloc_borders(struct Part *part, u16 length);
 void part_calculate_border_normals(struct Part *);
 void part_set_size_and_pos_render(struct Part *part);
-void stub_10a8_280a(struct Part *part, int c);
-void stub_10a8_2b6d(struct Part *part, int c);
 void stub_10a8_21cb(struct Part *part, u8 c);
 int stub_1050_02db(struct Part *part);
 // Rust (src/tim_c.rs) returns c_int, not a genuine bool -- see the matching comment above
@@ -208,7 +206,7 @@ void teeter_totter_run(struct Part *part) {
                         curpart->vel_hi_precision.y = speed;
                     }
                 }
-                stub_10a8_2b6d(curpart, 3);
+                queue_part_dirty_rects(curpart, 3);
                 if (curpart->vel_hi_precision.y < 0) {
                     curpart->pos_prev1.y = curpart->pos.y - 16;
                     stub_1050_02db(curpart);
@@ -333,7 +331,7 @@ void balloon_run(struct Part *part) {
     part->flags2 |= 0x0040;
 
     if (part->state1 == 6) {
-        stub_10a8_2b6d(part, 3);
+        queue_part_dirty_rects(part, 3);
         part->flags2 |= F2_DISAPPEARED;
         return;
     }
@@ -455,7 +453,7 @@ void pokey_the_cat_run(struct Part *part) {
                                 move_x = someflag ? 192 : 128;
                             } else {
                                 part->flags3 |= 0x0080;
-                                stub_10a8_2b6d(curpart, 3);
+                                queue_part_dirty_rects(curpart, 3);
                                 curpart->flags2 |= F2_DISAPPEARED;
                                 curpart->flags3 |= 0x0200;
                                 play_sound(0x0D);

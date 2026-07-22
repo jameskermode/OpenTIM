@@ -128,6 +128,12 @@ void initialize_llamas(void);
 int llama2_insert_by_force(struct Part *part_a, struct Part *part_b);
 void queue_dirty_rect(struct ShortVec *pos, struct ShortVec *size, u8 param3, u8 param4, s16 param5);
 void queue_rope_dirty_rects(struct Part *part, int _unused);
+// Renamed from stub_10a8_2b6d.
+void queue_part_dirty_rects(struct Part *part, int c);
+// Renamed from stub_10a8_280a.
+void queue_dirty_rects_for_attachments(struct Part *part, int c);
+// Not renamed -- see the doc comment above its Rust definition in src/tim_c.rs.
+struct Part* stub_10a8_0ab8(struct Part *part);
 void part_set_size(struct Part *part);
 void part_set_size_and_pos_render(struct Part *part);
 s16 teeter_totter_helper_get_part_speed(struct Part *part);

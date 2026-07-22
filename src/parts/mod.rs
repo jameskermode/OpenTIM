@@ -321,7 +321,7 @@ mod incline {
         part.flags2 ^= 0x0010;
         reset(part);
         unsafe {
-            tim_c::stub_10a8_2b6d(part, 3);
+            tim_c::queue_part_dirty_rects(part, 3);
             tim_c::stub_10a8_21cb(part, 2);
         }
     }
@@ -691,8 +691,8 @@ mod teeter_totter {
         reset(part);
         unsafe {
             tim_c::part_set_size_and_pos_render(part);
-            tim_c::stub_10a8_280a(part, 3);
-            tim_c::stub_10a8_2b6d(part, 3);
+            tim_c::queue_dirty_rects_for_attachments(part, 3);
+            tim_c::queue_part_dirty_rects(part, 3);
             tim_c::stub_10a8_21cb(part, 2);
         }
     }
@@ -1040,8 +1040,8 @@ mod mort_the_mouse_cage {
             part.belt_loc.x = 3;
         }
         unsafe {
-            tim_c::stub_10a8_280a(part, 3);
-            tim_c::stub_10a8_2b6d(part, 3);
+            tim_c::queue_dirty_rects_for_attachments(part, 3);
+            tim_c::queue_part_dirty_rects(part, 3);
             tim_c::stub_10a8_21cb(part, 2);
         }
     }
@@ -1347,7 +1347,7 @@ mod pokey_the_cat {
         reset(part);
         unsafe {
             tim_c::part_set_size_and_pos_render(part);
-            tim_c::stub_10a8_2b6d(part, 3);
+            tim_c::queue_part_dirty_rects(part, 3);
             tim_c::stub_10a8_21cb(part, 2);
         }
     }
@@ -2292,8 +2292,8 @@ mod eye_hook {
         part.flags2 ^= F2_FLIP_VERT;
         reset(part);
         unsafe {
-            tim_c::stub_10a8_280a(part, 3);
-            tim_c::stub_10a8_2b6d(part, 3);
+            tim_c::queue_dirty_rects_for_attachments(part, 3);
+            tim_c::queue_part_dirty_rects(part, 3);
             tim_c::stub_10a8_21cb(part, 2);
         }
     }
