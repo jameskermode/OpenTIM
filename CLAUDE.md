@@ -109,6 +109,14 @@ opentim <game-dir> <level> --screenshot <out.ppm> [ticks] [--borders]
 
 The level argument is either a path to a saved machine on disk (parsed as **freeform**, e.g. `CATOMATC.TIM`) or the name of an entry inside the archive (parsed as a **puzzle**, e.g. `L6.LEV`), decompressed via `decoders::generic_decode` if needed.
 
+### Verification gate
+
+`./scripts/verify.sh` is the gate for any change that must not alter simulation
+behaviour. It builds debug, release and wasm, runs the unit tests, asserts that all
+three configurations produce identical part state across 7 levels at 4 tick counts,
+and checks that loading a level replaces the previous world. Run it after every
+function ported from C.
+
 ## Architecture
 
 ### Two-language body, one data model
