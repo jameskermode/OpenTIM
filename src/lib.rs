@@ -164,28 +164,163 @@ pub fn tick() {
     }
 }
 
-/// One line per part: type, position, size, state and flags.
+/// One line per part, dumping every simulation-relevant field of `Part` plus the contents
+/// of any attached `RopeData`/`BeltData`.
 ///
 /// Shared by the CLI and the web build so the two can be compared directly, which is how
-/// the wasm engine is checked against the native one.
+/// the wasm engine is checked against the native one, and is what the 28 golden baselines
+/// under `tests/baselines/` are captured from.
+///
+/// Deliberately excludes every raw pointer VALUE (`next`, `prev`, `links_to`,
+/// `links_to_design`, `plug_parts`, `goober_parts`, `rope_data`, `belt_data`,
+/// `interactions`, `bounce_part`, `borders_data`): these are heap addresses that differ
+/// between runs and between native and wasm, so printing them would make every baseline
+/// diff look like a real regression. Where a pointer's identity matters for the
+/// simulation, a stable derived fact is recorded instead: `resolve()` below turns a part
+/// pointer into `<list>:<index>` (its position within the static/moving/bin list it
+/// currently lives in, exactly the position it -- or, for bin parts, would -- appear at in
+/// this same dump), `null` if the pointer is null, or `ext` if it points at a part this
+/// dump cannot find (should not happen given the invariants elsewhere in this codebase,
+/// but is a safe fallback rather than a panic). `rope_data`/`belt_data` themselves are
+/// dereferenced to print their scalar contents (endpoint positions, rope slots, widths);
+/// only the *pointers inside* those structs are resolved rather than printed raw.
+///
+/// `field_0x14`, `field_0x15`, `field_0x7A` and `field_0x7C` on `Part` are deliberately
+/// left out: nothing in the port (Rust or the still-C code) reads or writes them, `Part`s
+/// are always `alloc_zeroed`, and nothing ever mutates them, so they are guaranteed to
+/// print as `0` forever and would only add noise. If a future port step gives one of them
+/// a name, add it here.
 pub fn parts_summary() -> String {
     use std::fmt::Write;
+    use std::collections::HashMap;
+
+    let fmt_sv = |v: tim_c::ShortVec| format!("({},{})", v.x, v.y);
+    let fmt_bv = |v: tim_c::ByteVec| format!("({},{})", v.x, v.y);
+
+    // Every part currently in any of the three lists, keyed by address, so pointer fields
+    // that link to another part can be recorded as "which part" (by stable list position)
+    // rather than as an address. Built once up front and reused for every part printed
+    // below -- the world does not change while this function runs.
+    let bin_root_next = unsafe { (*std::ptr::addr_of!(tim_c::PARTS_BIN_ROOT)).next };
+    let mut index: HashMap<usize, String> = HashMap::new();
+    for (label, iter) in [
+        ("static", unsafe { tim_c::static_parts_iter() }),
+        ("moving", unsafe { tim_c::moving_parts_iter() }),
+        ("bin", unsafe { tim_c::PartsIterator::new(bin_root_next) }),
+    ] {
+        for (i, part) in iter.enumerate() {
+            index.insert(part as *const tim_c::Part as usize, format!("{}:{}", label, i));
+        }
+    }
+    let resolve = |p: *const tim_c::Part| -> String {
+        if p.is_null() {
+            "null".to_string()
+        } else {
+            index.get(&(p as usize)).cloned().unwrap_or_else(|| "ext".to_string())
+        }
+    };
+
+    let fmt_rope = |r: &tim_c::RopeData| -> String {
+        format!(
+            "{{owner={} part1={} part2={} orig_part1={} orig_part2={} slots=({},{}) orig_slots=({},{}) unk={}/{}/{} ends=[{},{}] ends_prev1=[{},{}] ends_prev2=[{},{}]}}",
+            resolve(r.rope_or_pulley_part), resolve(r.part1), resolve(r.part2),
+            resolve(r.original_part1), resolve(r.original_part2),
+            r.part1_rope_slot, r.part2_rope_slot,
+            r.original_part1_rope_slot, r.original_part2_rope_slot,
+            r.rope_unknown, r.rope_unknown_prev1, r.rope_unknown_prev2,
+            fmt_sv(r.ends_pos[0]), fmt_sv(r.ends_pos[1]),
+            fmt_sv(r.ends_pos_prev1[0]), fmt_sv(r.ends_pos_prev1[1]),
+            fmt_sv(r.ends_pos_prev2[0]), fmt_sv(r.ends_pos_prev2[1]),
+        )
+    };
+    let fmt_belt = |b: &tim_c::BeltData| -> String {
+        format!(
+            "{{unk0={} owner={} part1={} part2={} pos=[{},{},{},{}] prev1=[{},{},{},{}] prev2=[{},{},{},{}]}}",
+            b.field_0x00, resolve(b.belt_part), resolve(b.part1), resolve(b.part2),
+            fmt_sv(b.pos1), fmt_sv(b.pos2), fmt_sv(b.pos3), fmt_sv(b.pos4),
+            fmt_sv(b.pos1_prev1), fmt_sv(b.pos2_prev1), fmt_sv(b.pos3_prev1), fmt_sv(b.pos4_prev1),
+            fmt_sv(b.pos1_prev2), fmt_sv(b.pos2_prev2), fmt_sv(b.pos3_prev2), fmt_sv(b.pos4_prev2),
+        )
+    };
+
     let mut out = String::new();
-    for (label, iter) in &mut [
+    for (label, iter) in [
         ("static", unsafe { tim_c::static_parts_iter() }),
         ("moving", unsafe { tim_c::moving_parts_iter() }),
     ] {
         for part in iter {
-            let _ = writeln!(
+            let _ = write!(
                 out,
-                "  {} {:?} pos=({},{}) size=({},{}) state1={} flags1={:04x} flags2={:04x}",
+                "  {} {:?} pos={} pos_prev1={} pos_prev2={} pos_render={} pos_render_prev1={} pos_render_prev2={} pos_hi=({},{}) vel_hi={}",
                 label,
                 part::PartType::from_u16(part.part_type),
-                part.pos.x, part.pos.y,
-                part.size.x, part.size.y,
-                part.state1,
-                part.flags1, part.flags2,
+                fmt_sv(part.pos), fmt_sv(part.pos_prev1), fmt_sv(part.pos_prev2),
+                fmt_sv(part.pos_render), fmt_sv(part.pos_render_prev1), fmt_sv(part.pos_render_prev2),
+                part.pos_x_hi_precision, part.pos_y_hi_precision,
+                fmt_sv(part.vel_hi_precision),
             );
+            let _ = write!(
+                out,
+                " size={} size_prev1={} size_prev2={} size_something={} size_something2={} mass={} force={}",
+                fmt_sv(part.size), fmt_sv(part.size_prev1), fmt_sv(part.size_prev2),
+                fmt_sv(part.size_something), fmt_sv(part.size_something2),
+                part.mass, part.force,
+            );
+            let _ = write!(
+                out,
+                " state1={} state1_prev1={} state1_prev2={} state2={} extra1={} extra1_prev1={} extra1_prev2={} extra2={} extra2_prev1={} extra2_prev2={}",
+                part.state1, part.state1_prev1, part.state1_prev2, part.state2,
+                part.extra1, part.extra1_prev1, part.extra1_prev2,
+                part.extra2, part.extra2_prev1, part.extra2_prev2,
+            );
+            let _ = write!(
+                out,
+                " flags1={:04x} flags2={:04x} flags3={:04x}",
+                part.flags1, part.flags2, part.flags3,
+            );
+            let _ = write!(
+                out,
+                " orig_pos=({},{}) orig_state1={} orig_state2={} orig_flags2={:04x}",
+                part.original_pos_x, part.original_pos_y,
+                part.original_state1, part.original_state2, part.original_flags2,
+            );
+            let _ = write!(
+                out,
+                " belt_loc={} belt_width={} rope_loc=[{},{}] fuse_loc={} plug_choose={} goober={}",
+                fmt_bv(part.belt_loc), part.belt_width,
+                fmt_bv(part.rope_loc[0]), fmt_bv(part.rope_loc[1]),
+                fmt_bv(part.fuse_loc), part.plug_choose, part.goober,
+            );
+            let _ = write!(
+                out,
+                " num_borders={} bounce_side_flags=({},{}) bounce_angle={} bounce_border_index={}",
+                part.num_borders,
+                part.bounce_field_0x86[0], part.bounce_field_0x86[1],
+                part.bounce_angle, part.bounce_border_index,
+            );
+            let _ = write!(
+                out,
+                " links_to=[{},{}] links_to_design=[{},{}] plug_parts=[{},{}] goober_parts=[{},{}] bounce_part={} interactions={}",
+                resolve(part.links_to[0]), resolve(part.links_to[1]),
+                resolve(part.links_to_design[0]), resolve(part.links_to_design[1]),
+                resolve(part.plug_parts[0]), resolve(part.plug_parts[1]),
+                resolve(part.goober_parts[0]), resolve(part.goober_parts[1]),
+                resolve(part.bounce_part), resolve(part.interactions),
+            );
+            let _ = write!(
+                out,
+                " belt={}",
+                if part.belt_data.is_null() { "none".to_string() } else { fmt_belt(unsafe { &*part.belt_data }) },
+            );
+            for (i, rd) in part.rope_data.iter().enumerate() {
+                let _ = write!(
+                    out,
+                    " rope{}={}",
+                    i,
+                    if rd.is_null() { "none".to_string() } else { fmt_rope(unsafe { &**rd }) },
+                );
+            }
+            let _ = writeln!(out);
         }
     }
     out
