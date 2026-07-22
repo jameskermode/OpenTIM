@@ -1431,41 +1431,6 @@ void stub_1080_1777(struct Part *part) {
     }
 }
 
-/* TIMWIN: 1090:1480
-   Accurate */
-void bucket_handle_contained_parts(struct Part *bucket) {
-    if (bucket->type != P_BUCKET) {
-        return;
-    }
-
-    bucket->interactions = 0;
-
-    EACH_MOVING_PART(curpart) {
-        if (bucket == curpart) continue;
-        if (ANY_FLAGS(curpart->flags2, F2_DISAPPEARED)) continue;
-        if (curpart->type == P_CAGE) continue;
-
-        s16 curpart_x_center = curpart->pos_prev1.x + (curpart->size.x>>1);
-        s16 curpart_y_bottom = curpart->pos_prev1.y + curpart->size.y;
-        if (curpart->type == P_ROCKET) {
-            curpart_y_bottom -= 12;
-        }
-
-        bool in_x = BETWEEN_EXCL(bucket->pos_prev1.x + 4, curpart_x_center, bucket->pos_prev1.x + 32);
-        bool in_y = BETWEEN_EXCL(bucket->pos_prev1.y + 20, curpart_y_bottom, bucket->pos_prev1.y + bucket->size.y + 4);
-        bool in_bucket = in_x && (((curpart->bounce_part == bucket) && (curpart->vel_hi_precision.y > 0)) || in_y);
-
-        if (in_bucket) {
-            curpart->interactions = bucket->interactions;
-            bucket->interactions = curpart;
-            curpart->flags3 |= F3_0010;
-
-            curpart->vel_hi_precision = bucket->vel_hi_precision;
-
-            curpart->extra1 = bucket->pos.y + 20;
-        }
-    }
-}
 
 // bucket_add_mass has moved to Rust (src/tim_c.rs).
 

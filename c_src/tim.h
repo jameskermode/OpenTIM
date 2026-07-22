@@ -115,6 +115,7 @@ void initialize_llamas(void);
 void part_set_size(struct Part *part);
 s16 teeter_totter_helper_get_part_speed(struct Part *part);
 s16 distance_to_rope_link(struct RopeData *rope, struct Part *part, s16 *out_x, s16 *out_y);
+void bucket_handle_contained_parts(struct Part *bucket);
 
 #define EACH_STATIC_PART(varname) for (struct Part *varname = STATIC_PARTS_ROOT.next; varname != 0; varname = varname->next)
 #define EACH_MOVING_PART(varname) for (struct Part *varname = MOVING_PARTS_ROOT.next; varname != 0; varname = varname->next)

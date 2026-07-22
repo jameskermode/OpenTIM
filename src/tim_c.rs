@@ -1479,3 +1479,70 @@ pub extern "C" fn distance_to_rope_link(
         )
     }
 }
+
+/// TIMWIN: 1090:1480
+/// Accurate
+///
+/// Safety: `bucket` is dereferenced unconditionally, exactly matching the C (no null check
+/// there either); every caller passes a live `Part`. The `EACH_MOVING_PART` walk is
+/// reproduced with `moving_parts_iter_mut`, which follows the same `MOVING_PARTS_ROOT.next` /
+/// `->next` chain the C macro does; each yielded `curpart` is a live part linked into that
+/// list, so dereferencing it (including writing through it) is sound, matching the C's
+/// unchecked `curpart->...` field accesses.
+///
+/// `curpart_x_center` and `curpart_y_bottom` are computed in `i32` (mirroring C's promotion of
+/// the `s16` fields to `int` for `+`/`>>`/unary `-=`) and truncated back to `i16` immediately,
+/// matching the C's `s16` locals; the subsequent `BETWEEN_EXCL` comparisons are then done by
+/// widening those truncated `i16` values back to `i32` alongside the other `i32` bucket-derived
+/// bounds, exactly as C's `<` promotes both `s16` operands to `int`.
+#[no_mangle]
+pub extern "C" fn bucket_handle_contained_parts(bucket: *mut Part) {
+    unsafe {
+        if (*bucket).part_type != PartType::Bucket as u16 {
+            return;
+        }
+
+        (*bucket).interactions = std::ptr::null_mut();
+
+        for curpart in moving_parts_iter_mut() {
+            if bucket == curpart {
+                continue;
+            }
+            if (*curpart).flags2 & 0x2000 != 0 {
+                continue;
+            }
+            if (*curpart).part_type == PartType::Cage as u16 {
+                continue;
+            }
+
+            let curpart_x_center =
+                ((*curpart).pos_prev1.x as i32 + (((*curpart).size.x as i32) >> 1)) as i16;
+            let mut curpart_y_bottom =
+                ((*curpart).pos_prev1.y as i32 + (*curpart).size.y as i32) as i16;
+            if (*curpart).part_type == PartType::Rocket as u16 {
+                curpart_y_bottom = (curpart_y_bottom as i32 - 12) as i16;
+            }
+
+            let bucket_x_lo = (*bucket).pos_prev1.x as i32 + 4;
+            let bucket_x_hi = (*bucket).pos_prev1.x as i32 + 32;
+            let in_x = bucket_x_lo < curpart_x_center as i32 && (curpart_x_center as i32) < bucket_x_hi;
+
+            let bucket_y_lo = (*bucket).pos_prev1.y as i32 + 20;
+            let bucket_y_hi = (*bucket).pos_prev1.y as i32 + (*bucket).size.y as i32 + 4;
+            let in_y = bucket_y_lo < curpart_y_bottom as i32 && (curpart_y_bottom as i32) < bucket_y_hi;
+
+            let in_bucket = in_x
+                && (((*curpart).bounce_part == bucket && (*curpart).vel_hi_precision.y > 0) || in_y);
+
+            if in_bucket {
+                (*curpart).interactions = (*bucket).interactions;
+                (*bucket).interactions = curpart;
+                (*curpart).flags3 |= 0x0010;
+
+                (*curpart).vel_hi_precision = (*bucket).vel_hi_precision;
+
+                (*curpart).extra1 = ((*bucket).pos.y as i32 + 20) as i16;
+            }
+        }
+    }
+}
