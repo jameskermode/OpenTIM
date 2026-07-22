@@ -36,6 +36,40 @@ cargo test sine_cosine_equivalence   # single test (tests live in #[cfg(test)] m
 
 Window keys: `Space` run/pause, `B` border debug overlay, `S` screenshot, `G` graphviz dump to `out.gv`, `Esc` quit.
 
+### WebAssembly
+
+`./scripts/build-web.sh` builds the browser version into `web/pkg`, then serve `web/`.
+
+The crate is a lib + bin: `src/lib.rs` holds everything, `src/main.rs` is the desktop CLI
+(gated off for wasm), and `src/web.rs` is the browser entry point. Build the **lib only**
+for wasm — the bin and cdylib would otherwise collide on the same output name.
+
+Things that are easy to get wrong here, all learned the hard way:
+
+- Apple clang has no wasm backend, so `build.rs` drives `zig cc` for wasm targets.
+- The `cc` crate only emits `--target` for compilers it *recognises*. It does not
+  recognise the zig wrapper, so the target flag must be passed explicitly, otherwise zig
+  builds for the host.
+- The host `ar` writes an archive `wasm-ld` cannot read. Use `zig ar`.
+- Both of those failures are silent: `wasm32-unknown-unknown` turns undefined symbols into
+  module *imports*, so the link succeeds and you get a working-looking `.wasm` with the
+  entire C engine missing. **Check the import section, not the exit code.**
+- Freestanding wasm has no libc. `src/wasm_libc.rs` provides malloc/free/calloc/abs;
+  memcpy/memset come from `compiler_builtins` and `sqrtf` is a native instruction.
+- The browser cannot run a blocking loop, so `src/web.rs` uses requestAnimationFrame and
+  paces the simulation from wall-clock time. Do not tick once per frame: on a 120Hz display
+  that runs the game at four times speed.
+
+To check the wasm engine against native, build with `--target nodejs` and diff
+`Game::parts_summary()` against the CLI's dump at the same tick count and **the same
+optimisation level** (see the known issue below).
+
+### Known issue: simulation depends on optimisation level
+
+Debug and release builds do not simulate identically — balloons diverge on the same
+machine between `-O0` and `-O2`, which means there is UB in the C core. Always compare
+like-for-like profiles when checking simulation changes, or you will chase a ghost.
+
 ### CLI
 
 `argv[1]` is always the game install directory (the one holding `RESOURCE.MAP`). Assets are kept in the gitignored `game-data/` — `game-data/tim1` (DOS TIM 1) and `game-data/tim2` (TIM 2). Never commit anything under it.

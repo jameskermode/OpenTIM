@@ -1,0 +1,66 @@
+<!doctype html>
+<!-- Dev-only harness: fetches game data over HTTP instead of asking the user to drop it,
+     so the browser path can be verified headlessly. Not part of the shipped page. -->
+<html lang="en">
+<head><meta charset="utf-8"><title>OpenTIM auto test</title>
+<style>
+  body { margin:0; padding:12px; background:#14161a; color:#e6e6e6;
+         font:14px ui-monospace, monospace; }
+  #log { white-space: pre-wrap; margin-bottom: 10px; }
+  canvas { image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<div id="log">booting...</div>
+<div id="canvas-container"></div>
+
+<script type="module">
+import init, { Game } from './pkg/opentim.js';
+const log = (m) => { document.getElementById('log').textContent += '\n' + m; };
+window.onerror = (m) => log('ERROR ' + m);
+
+try {
+  await init();
+  log('wasm initialised');
+
+  const base = '/game-data/tim1/';
+  const names = ['RESOURCE.MAP', 'RESOURCE.001', 'RESOURCE.002', 'RESOURCE.003', 'RESOURCE.004'];
+  const files = {};
+  for (const n of names) {
+    const r = await fetch(base + n);
+    if (!r.ok) throw new Error('fetch failed for ' + n + ': ' + r.status);
+    files[n] = new Uint8Array(await r.arrayBuffer());
+  }
+  log('fetched ' + Object.keys(files).length + ' files');
+
+  const game = new Game(files);
+  log('archive entries: ' + game.resource_names().length);
+
+  const objective = game.load_level('L6.LEV');
+  log('objective: ' + objective);
+
+  game.start('canvas-container');
+  log('canvas started');
+
+  // Count how many animation frames we actually get, to tell "simulation not running"
+  // apart from "headless gave us no frames".
+  let frames = 0;
+  const count = () => { frames++; requestAnimationFrame(count); };
+  requestAnimationFrame(count);
+
+  // Drive the engine directly, independently of the animation loop.
+  game.tick_n(30);
+  log('after explicit tick_n(30): ' + game.parts_summary().trim().split('\n').pop().trim());
+
+  game.set_running(true);
+  setTimeout(() => {
+    log('rAF frames seen: ' + frames);
+    log('after set_running: ' + game.parts_summary().trim().split('\n').pop().trim());
+    document.title = 'OK';
+  }, 1500);
+} catch (e) {
+  log('EXCEPTION ' + (e && e.stack ? e.stack : e));
+}
+</script>
+</body>
+</html>

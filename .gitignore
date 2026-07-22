@@ -7,3 +7,6 @@ generated-structs.js
 game-data/
 # macOS
 .DS_Store
+
+# wasm build output
+web/pkg/

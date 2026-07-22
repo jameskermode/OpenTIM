@@ -1614,10 +1614,14 @@ dependencies = [
  "anyhow",
  "byteorder",
  "cc",
+ "console_error_panic_hook",
+ "js-sys",
  "minifb",
  "nannou",
  "num_enum 0.5.1",
  "thiserror",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]

@@ -65,6 +65,34 @@ opentim <game-dir> <level> --screenshot <out.ppm> [ticks] [--borders]
 A level is either a saved machine on disk (`CATOMATC.TIM`) or the name of a
 puzzle inside the archive (`L6.LEV`).
 
+## Browser build
+
+OpenTIM also runs in the browser. The simulation is the same C core cross-compiled to
+wasm32, and it produces bit-identical results to the native build.
+
+Prerequisites:
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --version 0.2.126
+brew install zig     # Apple clang has no WebAssembly backend
+```
+
+Then:
+
+```sh
+./scripts/build-web.sh          # writes web/pkg
+python3 -m http.server -d web 8080
+```
+
+Open <http://localhost:8080/> and drop in your own game folder — the one holding
+`RESOURCE.MAP` and `RESOURCE.00*`. Nothing is uploaded; the files are read in the browser
+and the whole game runs locally.
+
+`web/test-auto.html` is a development harness that fetches the game data over HTTP instead
+of asking for a drop, so the browser path can be checked without clicking. Serve the repo
+root rather than `web/` to use it, and put the data in `game-data/tim1`.
+
 ## Status
 
 The asset pipeline and level parsing are complete and verified against the
@@ -100,8 +128,24 @@ use magic `0xACEF` against TIM 1's `0xACED` and carry extra fields.
 * Added `--list-resources`, `--extract`, `--dump-images` and `--screenshot`.
 * Fixed a null-pointer dereference on unlinked pulleys, and an integer underflow
   on zero-height walls (the original truncated to a byte and wrapped).
+* Added a WebAssembly build (upstream listed this as a stretch goal). The C core is
+  cross-compiled with `zig cc`, freestanding wasm has no libc so `src/wasm_libc.rs`
+  supplies the handful of symbols the core needs, and `src/web.rs` drives a canvas from a
+  requestAnimationFrame loop. Verified bit-identical to native across every loadable level.
 * Added `CLAUDE.md` with architecture notes, and a design spec for the editor in
   `docs/specs/`.
+
+## Known issue: the simulation depends on optimisation level
+
+`cargo build` and `cargo build --release` do not simulate identically. Balloons diverge,
+on the same machine, purely from `-O0` versus `-O2` — which means there is undefined
+behaviour somewhere in the C core. For a project whose goal is matching the original
+exactly, this is worth tracking down. Compare with:
+
+```sh
+./target/debug/opentim   game-data/tim1 L25.LEV 30
+./target/release/opentim game-data/tim1 L25.LEV 30
+```
 
 ## Goals
 

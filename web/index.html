@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OpenTIM</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 2rem;
+    font: 15px/1.5 ui-sans-serif, system-ui, sans-serif;
+    background: #14161a; color: #e6e6e6;
+    display: flex; flex-direction: column; align-items: center; gap: 1rem;
+  }
+  h1 { font-size: 1.25rem; font-weight: 600; margin: 0; }
+  p  { margin: 0; color: #9aa0a6; max-width: 46rem; text-align: center; }
+  #drop {
+    border: 2px dashed #3a4048; border-radius: 10px;
+    padding: 2.5rem 3rem; text-align: center; cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  #drop.over { border-color: #6aa9ff; background: #1b2030; }
+  #stage { display: none; flex-direction: column; align-items: center; gap: .75rem; }
+  #canvas-container canvas { display: block; border-radius: 4px; background: #000; }
+  .row { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; justify-content: center; }
+  select, button {
+    font: inherit; padding: .35rem .7rem; border-radius: 6px;
+    border: 1px solid #3a4048; background: #1e232a; color: #e6e6e6; cursor: pointer;
+  }
+  #objective { font-style: italic; color: #cfd3d8; min-height: 1.5em; text-align: center; }
+  #err { color: #ff8a8a; white-space: pre-wrap; }
+  kbd {
+    background: #262b33; border: 1px solid #3a4048; border-bottom-width: 2px;
+    border-radius: 4px; padding: 0 .35em; font-size: .9em;
+  }
+</style>
+</head>
+<body>
+
+<h1>OpenTIM</h1>
+<p>
+  An open source re-implementation of <em>The Incredible Machine</em>.
+  It contains no game data &mdash; you supply your own files from a copy of the game
+  you legally own. Nothing is uploaded; everything runs locally in your browser.
+</p>
+
+<div id="drop">
+  <strong>Drop your TIM game folder here</strong><br>
+  <span style="color:#9aa0a6">or click to choose it &mdash; needs RESOURCE.MAP and RESOURCE.00*</span>
+  <input id="picker" type="file" webkitdirectory multiple hidden>
+</div>
+
+<div id="stage">
+  <div class="row">
+    <select id="levels"></select>
+    <button id="toggle">Start</button>
+    <button id="reset">Reset</button>
+  </div>
+  <div id="objective"></div>
+  <div id="canvas-container"></div>
+  <p>
+    <kbd>Space</kbd> run/pause &nbsp; <kbd>B</kbd> collision borders
+    &mdash; click the canvas first so it has keyboard focus.
+  </p>
+</div>
+
+<div id="err"></div>
+
+<script type="module">
+import init, { Game } from './pkg/opentim.js';
+
+const drop = document.getElementById('drop');
+const picker = document.getElementById('picker');
+const stage = document.getElementById('stage');
+const levels = document.getElementById('levels');
+const toggle = document.getElementById('toggle');
+const resetBtn = document.getElementById('reset');
+const objective = document.getElementById('objective');
+const err = document.getElementById('err');
+
+let game = null;
+let running = false;
+let currentLevel = null;
+
+const fail = (e) => { err.textContent = String(e && e.message ? e.message : e); console.error(e); };
+
+await init();
+
+drop.addEventListener('click', () => picker.click());
+drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  drop.classList.remove('over');
+  try {
+    await boot(await filesFromDataTransfer(e.dataTransfer));
+  } catch (ex) { fail(ex); }
+});
+picker.addEventListener('change', async () => {
+  try {
+    await boot(Array.from(picker.files));
+  } catch (ex) { fail(ex); }
+});
+
+// Walk a dropped directory (or accept a flat set of dropped files).
+async function filesFromDataTransfer(dt) {
+  const out = [];
+  const walk = async (entry) => {
+    if (entry.isFile) {
+      out.push(await new Promise((res, rej) => entry.file(res, rej)));
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      for (;;) {
+        const batch = await new Promise((res, rej) => reader.readEntries(res, rej));
+        if (!batch.length) break;
+        for (const e of batch) await walk(e);
+      }
+    }
+  };
+  const entries = Array.from(dt.items)
+    .map((i) => i.webkitGetAsEntry && i.webkitGetAsEntry())
+    .filter(Boolean);
+  if (entries.length) {
+    for (const e of entries) await walk(e);
+  } else {
+    out.push(...Array.from(dt.files));
+  }
+  return out;
+}
+
+async function boot(fileList) {
+  err.textContent = '';
+  const files = {};
+  for (const f of fileList) {
+    const base = f.name.split('/').pop().toUpperCase();
+    files[base] = new Uint8Array(await f.arrayBuffer());
+  }
+  if (!files['RESOURCE.MAP']) {
+    throw new Error('No RESOURCE.MAP among those files. Pick the folder containing RESOURCE.MAP and RESOURCE.001.');
+  }
+
+  game = new Game(files);
+
+  const names = game.resource_names().filter((n) => n.endsWith('.LEV'));
+  names.sort((a, b) => {
+    const na = parseInt(a.replace(/\D/g, ''), 10), nb = parseInt(b.replace(/\D/g, ''), 10);
+    return (isNaN(na) || isNaN(nb)) ? a.localeCompare(b) : na - nb;
+  });
+  levels.innerHTML = '';
+  for (const n of names) {
+    const o = document.createElement('option');
+    o.value = o.textContent = n;
+    levels.appendChild(o);
+  }
+
+  drop.style.display = 'none';
+  stage.style.display = 'flex';
+
+  // Levels containing parts that are not implemented yet will throw on load.
+  const preferred = names.includes('L6.LEV') ? 'L6.LEV' : names[0];
+  levels.value = preferred;
+  loadLevel(preferred);
+
+  game.start('canvas-container');
+}
+
+function loadLevel(name) {
+  err.textContent = '';
+  try {
+    const obj = game.load_level(name);
+    currentLevel = name;
+    objective.textContent = obj || '';
+    setRunning(false);
+  } catch (ex) {
+    objective.textContent = '';
+    fail(new Error(`${name} did not load. Most levels need parts that are still unimplemented.\n${ex}`));
+  }
+}
+
+function setRunning(on) {
+  running = on;
+  game.set_running(on);
+  toggle.textContent = on ? 'Pause' : 'Start';
+}
+
+levels.addEventListener('change', () => loadLevel(levels.value));
+toggle.addEventListener('click', () => setRunning(!running));
+resetBtn.addEventListener('click', () => { if (currentLevel) loadLevel(currentLevel); });
+</script>
+</body>
+</html>

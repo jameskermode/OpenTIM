@@ -77,9 +77,9 @@ pub struct Sprites {
 }
 
 impl Sprites {
-    pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn load(resources: &mut crate::resource_dos::Resources) -> Result<Self, Box<dyn std::error::Error>> {
         let mut map = HashMap::new();
-        crate::load_images(&mut |filename, slice_idx, width, height, buf| {
+        crate::load_images(resources, &mut |filename, slice_idx, width, height, buf| {
             map.insert(
                 ImageId::new(filename, slice_idx),
                 Sprite { w: width as i32, h: height as i32, rgba: buf },
@@ -188,6 +188,7 @@ impl Canvas {
     }
 
     /// Write the framebuffer out as a binary PPM (P6).
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn write_ppm(&self, path: &str) -> std::io::Result<()> {
         use std::io::Write;
         let mut f = std::io::BufWriter::new(std::fs::File::create(path)?);
@@ -420,8 +421,9 @@ pub fn draw_borders(canvas: &mut Canvas) {
 }
 
 /// Render a single frame after `ticks` simulation steps and write it to a PPM.
-pub fn screenshot(path: &str, ticks: u32, show_borders: bool) -> Result<(), Box<dyn std::error::Error>> {
-    let sprites = Sprites::load()?;
+#[cfg(not(target_arch = "wasm32"))]
+pub fn screenshot(resources: &mut crate::resource_dos::Resources, path: &str, ticks: u32, show_borders: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let sprites = Sprites::load(resources)?;
     println!("loaded {} sprites", sprites.len());
 
     unsafe {
@@ -443,11 +445,12 @@ pub fn screenshot(path: &str, ticks: u32, show_borders: bool) -> Result<(), Box<
     Ok(())
 }
 
-/// Open a window and run the simulation.
-pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+/// Open a desktop window and run the simulation.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn run(resources: &mut crate::resource_dos::Resources) -> Result<(), Box<dyn std::error::Error>> {
     use minifb::{Key, Window, WindowOptions};
 
-    let sprites = Sprites::load()?;
+    let sprites = Sprites::load(resources)?;
     println!("loaded {} sprites", sprites.len());
 
     let mut window = Window::new(

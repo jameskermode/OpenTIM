@@ -3,7 +3,6 @@
 use std::io;
 use std::str;
 use std::convert::TryInto;
-use std::fs::File;
 use std::io::{Read, Seek};
 use std::path::Path;
 
@@ -165,7 +164,10 @@ struct ResourceEntry {
 }
 
 pub struct Resources {
-    resource_files: Vec<File>,
+    // Whole resource files held in memory rather than open handles, so the same code path
+    // works in the browser where there is no filesystem. The archives are small (under 1MB
+    // for TIM 1, under 4MB for TIM 2).
+    resource_files: Vec<io::Cursor<Vec<u8>>>,
 
     // I considered a HashMap earlier, but the list is so small that O(n) access is not likely to be a big deal.
     filename_to_resource_entry: Vec<(String, ResourceEntry)>,
@@ -200,12 +202,16 @@ impl Resources {
     }
 }
 
-pub fn from_map(root_directory: &str, map_filename: &str) -> io::Result<Resources> {
+/// Read the archive index from the bytes of RESOURCE.MAP, fetching each resource file it
+/// names through `fetch`. This is the filesystem-free path used by the web build; the
+/// native `from_map` is a thin wrapper over it.
+pub fn from_map_bytes<F>(map_bytes: &[u8], mut fetch: F) -> io::Result<Resources>
+    where F: FnMut(&str) -> Option<Vec<u8>>
+{
     let mut resource_file_entries: Vec<(String, Vec<(u32, u32)>)> = vec![];
     let mut total_entries = 0;
     {
-        let path = Path::new(root_directory).join(map_filename);
-        let mut f = File::open(path)?;
+        let mut f = io::Cursor::new(map_bytes);
         scan_resource_map_file(&mut f, |_resource_name, entry_count| {
             // New resource file
             Vec::with_capacity(entry_count as usize)
@@ -226,8 +232,10 @@ pub fn from_map(root_directory: &str, map_filename: &str) -> io::Result<Resource
 
     // Create a lookup of filename to resource file + offset
     for (resource_id, (resource_name, entries)) in resource_file_entries.into_iter().enumerate() {
-        let path = Path::new(root_directory).join(resource_name);
-        let mut f = File::open(path)?;
+        let bytes = fetch(&resource_name).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::NotFound, format!("missing resource file {}", resource_name))
+        })?;
+        let mut f = io::Cursor::new(bytes);
         for (_hash, offset) in entries {
             f.seek(io::SeekFrom::Start(offset as u64))?;
             let (name, payload_size) = read_header(&mut f, &mut name_buf)?;
@@ -247,6 +255,14 @@ pub fn from_map(root_directory: &str, map_filename: &str) -> io::Result<Resource
     Ok(Resources {
         resource_files: resource_files,
         filename_to_resource_entry: filename_to_resource_entry,
+    })
+}
+
+/// Native convenience wrapper: load RESOURCE.MAP and its resource files from a directory.
+pub fn from_map(root_directory: &str, map_filename: &str) -> io::Result<Resources> {
+    let map_bytes = std::fs::read(Path::new(root_directory).join(map_filename))?;
+    from_map_bytes(&map_bytes, |name| {
+        std::fs::read(Path::new(root_directory).join(name)).ok()
     })
 }
 
