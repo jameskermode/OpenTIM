@@ -1,60 +1,6 @@
 #include "tim.h"
 
-/* TIMWIN: 10a8:396f
-   Accurate */
-s16 approximate_hypot_of_rope(const struct RopeData *rope_data, enum RopeTime time, enum RopeFirstOrLast first_or_last) {
-    const struct RopeData *a, *b;
-    int i_a, i_b;
-
-    if (first_or_last == ROPE_FROM_FIRST) {
-        struct Part *v = rope_data->part1->links_to[rope_data->part1_rope_slot];
-
-        if (rope_data->part2 == v) {
-            // o ---- o   Part1 -> Part2
-            a = rope_data; i_a = 0;
-            b = rope_data; i_b = 1;
-        } else {
-            // o ---- u   Part1 -> Pulley (into left side)
-            a = rope_data;       i_a = 0;
-            b = v->rope_data[0]; i_b = 0;
-        }
-    } else {
-        // From the last part
-        if (!rope_data->part2) {
-            return 0;
-        }
-        
-        struct Part *v = rope_data->part2->links_to[rope_data->part2_rope_slot];
-
-        if (rope_data->part1 == v) {
-            // o ---- o   Part2 -> Part1
-            a = rope_data; i_a = 1;
-            b = rope_data; i_b = 0;
-        } else {
-            // o ---- u   Part2 -> Pulley (into right side)
-            a = rope_data;       i_a = 1;
-            b = v->rope_data[0]; i_b = 1;
-        }
-    }
-
-    if (!b) {
-        return 0;
-    }
-
-    switch (time) {
-        case ROPETIME_PREV2:
-        return approx_hypot(abs(a->ends_pos_prev2[i_a].x - b->ends_pos_prev2[i_b].x),
-                            abs(a->ends_pos_prev2[i_a].y - b->ends_pos_prev2[i_b].y));
-        
-        case ROPETIME_PREV1:
-        return approx_hypot(abs(a->ends_pos_prev1[i_a].x - b->ends_pos_prev1[i_b].x),
-                            abs(a->ends_pos_prev1[i_a].y - b->ends_pos_prev1[i_b].y));
-        
-        default:
-        return approx_hypot(abs(a->ends_pos      [i_a].x - b->ends_pos      [i_b].x),
-                            abs(a->ends_pos      [i_a].y - b->ends_pos      [i_b].y));
-    }
-}
+// approximate_hypot_of_rope: implemented in Rust (src/tim_c.rs); prototyped in tim.h.
 
 /* TIMWIN: 10a8:3b05
    Accurate */

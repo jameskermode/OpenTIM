@@ -1691,6 +1691,101 @@ pub extern "C" fn part_set_prev_vars(part: *mut Part) {
     }
 }
 
+/// TIMWIN: 10a8:396f
+/// Accurate
+///
+/// Safety: `rope_data` is dereferenced unconditionally to read `part1`/`part1_rope_slot` (or
+/// `part2`/`part2_rope_slot`), exactly matching the C's unchecked `rope_data->part1->...`.
+/// `rope_data->part1->links_to[...]` (`v`) is likewise dereferenced unconditionally when
+/// `rope_data->part2 != v` to read `v->rope_data[0]`, matching the C's unchecked
+/// `v->rope_data[0]`; this relies on the same invariant the C did (an active rope's `links_to`
+/// slot always points at a live part, whose primary `rope_data[0]` is populated when it's a
+/// pulley). `rope_data->part2` and the resulting `b` pointer each get one explicit null check,
+/// exactly matching the C's `if (!rope_data->part2) return 0;` and `if (!b) return 0;` -- no
+/// null checks are added or removed anywhere else.
+///
+/// Each `x`/`y` difference is computed in `i32` (mirroring C's promotion of the `s16` fields
+/// to `int` for `-`), then `.abs()`'d, then truncated back to `i16` on the call into
+/// `approx_hypot` -- matching C's implicit narrowing conversion of the `int` `abs(...)` result
+/// down to `approx_hypot`'s `s16` parameters (this truncation is exercised: differences whose
+/// absolute value exceeds `i16::MAX` silently wrap instead of being clamped or rejected, same
+/// as the original).
+#[no_mangle]
+pub extern "C" fn approximate_hypot_of_rope(
+    rope_data: *const RopeData,
+    time: c_int,
+    first_or_last: c_int,
+) -> i16 {
+    unsafe {
+        let a: *const RopeData;
+        let b: *const RopeData;
+        let i_a: usize;
+        let i_b: usize;
+
+        if first_or_last == 0 {
+            // ROPE_FROM_FIRST
+            let v = (*(*rope_data).part1).links_to[(*rope_data).part1_rope_slot as usize];
+
+            if (*rope_data).part2 == v {
+                // o ---- o   Part1 -> Part2
+                a = rope_data;
+                i_a = 0;
+                b = rope_data;
+                i_b = 1;
+            } else {
+                // o ---- u   Part1 -> Pulley (into left side)
+                a = rope_data;
+                i_a = 0;
+                b = (*v).rope_data[0];
+                i_b = 0;
+            }
+        } else {
+            // From the last part
+            if (*rope_data).part2.is_null() {
+                return 0;
+            }
+
+            let v = (*(*rope_data).part2).links_to[(*rope_data).part2_rope_slot as usize];
+
+            if (*rope_data).part1 == v {
+                // o ---- o   Part2 -> Part1
+                a = rope_data;
+                i_a = 1;
+                b = rope_data;
+                i_b = 0;
+            } else {
+                // o ---- u   Part2 -> Pulley (into right side)
+                a = rope_data;
+                i_a = 1;
+                b = (*v).rope_data[0];
+                i_b = 1;
+            }
+        }
+
+        if b.is_null() {
+            return 0;
+        }
+
+        match time {
+            1 => approx_hypot(
+                // ROPETIME_PREV2
+                (((*a).ends_pos_prev2[i_a].x as i32) - ((*b).ends_pos_prev2[i_b].x as i32)).abs() as i16,
+                (((*a).ends_pos_prev2[i_a].y as i32) - ((*b).ends_pos_prev2[i_b].y as i32)).abs() as i16,
+            ),
+            2 => approx_hypot(
+                // ROPETIME_PREV1
+                (((*a).ends_pos_prev1[i_a].x as i32) - ((*b).ends_pos_prev1[i_b].x as i32)).abs() as i16,
+                (((*a).ends_pos_prev1[i_a].y as i32) - ((*b).ends_pos_prev1[i_b].y as i32)).abs() as i16,
+            ),
+            _ => approx_hypot(
+                // default (ROPETIME_CURRENT)
+                (((*a).ends_pos[i_a].x as i32) - ((*b).ends_pos[i_b].x as i32)).abs() as i16,
+                (((*a).ends_pos[i_a].y as i32) - ((*b).ends_pos[i_b].y as i32)).abs() as i16,
+            ),
+        }
+    }
+}
+
 // `rand` is only needed by `generate_hypot_samples` below, which (like the C original) is dead
 // code never compiled into a shipped build. It is deliberately NOT declared for wasm32: the
 // wasm shim (`src/wasm_libc.rs`) never provided a `rand` either, for the same reason -- the C
