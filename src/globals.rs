@@ -5,9 +5,11 @@
 //! between calls; they are preserved as-is during the port and retired in phase 2.
 //!
 //! Every static here corresponds 1:1 to a `GLOBAL(...)` entry in `c_src/globals.h`, which
-//! remains the authoritative list of names, C types and initial values. `c_src/globals.h`
-//! now only declares these as `extern`; the definitions (and the storage backing them)
-//! live here.
+//! remains the authoritative list of names and C types. `c_src/globals.h` now only declares
+//! these as `extern`; the definitions, the storage backing them, AND the initial values all
+//! live here. The `init` argument to `GLOBAL(declaration, init)` in globals.h is inert (the
+//! macro discards it) and must not be treated as meaningful -- edit the initializer on the
+//! `static` below instead.
 
 use crate::tim_c::Part;
 

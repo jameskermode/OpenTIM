@@ -5,6 +5,9 @@
 // * If we don't know what it does, give it a codename. It's easier to remember (and more fun) than a number.
 
 // Globals now live in Rust (src/globals.rs); this header only declares them.
+// NOTE: `init` below is INERT -- the macro discards it and never applies it to anything.
+// Editing an `init` argument in this file silently does nothing. The real initial values
+// live on the `static` definitions in src/globals.rs; edit them there.
 #define GLOBAL(declaration, init) extern declaration;
 
 // The original game has an abundance of short-lived, temporary global variables (only used across a few function calls).
