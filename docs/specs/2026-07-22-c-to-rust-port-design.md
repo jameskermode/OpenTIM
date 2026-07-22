@@ -235,3 +235,24 @@ Later layers depend on infrastructure the gate did not have before this phase:
   missing silently twice, when a new doc comment was written directly under a previous
   function's doc comment with no blank line between them and rustdoc merged both `///`
   blocks onto the second function.
+
+
+## Deferred: continuous integration
+
+There is no CI. The verification gate is strong but entirely opt-in, and nothing stops a
+change landing without it having been run.
+
+Full enforcement is impossible here — the 28 baseline comparisons need the user's own game
+files, which cannot be uploaded. But most of the gate does NOT need them, and already runs
+under `ALLOW_NO_GAME_DATA=1`:
+
+* native debug and release builds, and the wasm build
+* the unit tests
+* the C diagnostics check (`-Wimplicit-function-declaration`, `-Wincompatible-pointer-types`)
+* the TIMWIN provenance-tag check
+* the FFI signature check (C prototypes vs Rust `extern "C"` definitions)
+
+That is the whole structural safety net minus the behavioural comparison, and it would catch
+the majority of what has actually gone wrong during this port. Worth adding a workflow that
+runs `ALLOW_NO_GAME_DATA=1 ./scripts/verify.sh`, with the limitation stated plainly so nobody
+mistakes a green tick for behavioural verification.
