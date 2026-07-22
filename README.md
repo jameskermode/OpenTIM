@@ -140,17 +140,22 @@ use magic `0xACEF` against TIM 1's `0xACED` and carry extra fields.
 * Added `CLAUDE.md` with architecture notes, and a design spec for the editor in
   `docs/specs/`.
 
-## Known issue: the simulation depends on optimisation level
+## Fixed: the simulation used to depend on optimisation level
 
-`cargo build` and `cargo build --release` do not simulate identically. Balloons diverge,
-on the same machine, purely from `-O0` versus `-O2` — which means there is undefined
-behaviour somewhere in the C core. For a project whose goal is matching the original
-exactly, this is worth tracking down. Compare with:
+Debug and release builds once simulated differently — balloons diverged on the same
+machine purely from `-O0` versus `-O2`. The cause was not undefined behaviour in the C, as
+first assumed, but an **ABI mismatch at the FFI boundary**: 22 functions were exported with
+`#[no_mangle] pub fn`, giving them the *Rust* ABI, while C called them as C functions. The
+Rust ABI is explicitly unspecified, so how a small integer return lands in the register is
+a codegen decision that changes with optimisation level.
 
-```sh
-./target/debug/opentim   game-data/tim1 L25.LEV 30
-./target/release/opentim game-data/tim1 L25.LEV 30
-```
+The visible symptom: `part_acceleration()` returns −198 for a balloon, but the C caller
+testing `part_acceleration(part->type) < 0` read it as non-negative at `-O0` and took the
+wrong branch when snapping a resting part's sub-pixel position.
+
+Every `#[no_mangle]` export now declares `extern "C"`. Debug and release agree across all
+loadable levels, and the wasm build agrees with both. When adding an export, always give it
+`extern "C"` — without it the code will appear to work and then diverge under optimisation.
 
 ## Goals
 

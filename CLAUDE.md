@@ -64,11 +64,29 @@ To check the wasm engine against native, build with `--target nodejs` and diff
 `Game::parts_summary()` against the CLI's dump at the same tick count and **the same
 optimisation level** (see the known issue below).
 
-### Known issue: simulation depends on optimisation level
+### The FFI boundary must use `extern "C"`
 
-Debug and release builds do not simulate identically — balloons diverge on the same
-machine between `-O0` and `-O2`, which means there is UB in the C core. Always compare
-like-for-like profiles when checking simulation changes, or you will chase a ghost.
+Every `#[no_mangle]` export in `tim_c.rs` and `parts/mod.rs` must be declared
+`pub extern "C" fn`. `#[no_mangle] pub fn` compiles and links fine but gives the function
+the *Rust* ABI, which is explicitly unspecified, while C calls it as a C function.
+
+This caused a real bug: debug and release builds simulated differently, because
+`part_acceleration()` returned -198 for a balloon and the C caller testing `< 0` read it as
+non-negative at `-O0`. It looked like undefined behaviour in the C core and was not.
+Symptoms of this class are opt-level-dependent behaviour and small integer returns that
+seem to arrive corrupted.
+
+Two consequences worth knowing:
+
+- A panic unwinding out of an `extern "C"` function aborts rather than being catchable, so
+  `catch_unwind` cannot wrap a Rust callback invoked through C. `implemented_matches_reality`
+  calls the part callbacks directly for exactly this reason.
+- `c_src/tim.h` declares `s16 part_mass(...)` while Rust returns `u16`. Harmless at current
+  value ranges, but the declarations and signatures should be kept in step.
+
+To check simulation changes, compare **like-for-like profiles**, and use
+`cargo run --example trace -- <dir> <level> <ticks> <part-type>` to dump one part's internal
+state per tick; diffing two traces localises a divergence to the exact tick and field.
 
 ### CLI
 

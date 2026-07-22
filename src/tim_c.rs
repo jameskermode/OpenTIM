@@ -428,12 +428,12 @@ impl RopeData {
 }
 
 #[no_mangle]
-pub extern fn unimplemented() {
+pub extern "C" fn unimplemented() {
     panic!("Unimplemented");
 }
 
 #[no_mangle]
-pub extern fn output_c(c_str: *const c_char) {
+pub extern "C" fn output_c(c_str: *const c_char) {
     use std::ffi::CStr;
     let c_str = unsafe { CStr::from_ptr(c_str) };
     if let Ok(s) = c_str.to_str() {
@@ -444,7 +444,7 @@ pub extern fn output_c(c_str: *const c_char) {
 }
 
 #[no_mangle]
-pub extern fn output_part_c(ptr: *const Part) {
+pub extern "C" fn output_part_c(ptr: *const Part) {
     let part = unsafe { ptr.as_ref() };
     if let Some(part) = part {
         println!("Output: {:?}", part);
@@ -454,13 +454,13 @@ pub extern fn output_part_c(ptr: *const Part) {
 }
 
 #[no_mangle]
-pub extern fn output_int_c(v: i64) {
+pub extern "C" fn output_int_c(v: i64) {
     println!("Output: {}", v);
 }
 
 /// TIMWIN: 10a8:4d2d
 #[no_mangle]
-pub extern fn play_sound(id: c_int) {
+pub extern "C" fn play_sound(id: c_int) {
     println!("Play sound: {}", id);
 }
 
@@ -468,22 +468,22 @@ pub extern fn play_sound(id: c_int) {
 use crate::math;
 
 #[no_mangle]
-pub extern fn arctan_c(dx: i32, dy: i32) -> u16 {
+pub extern "C" fn arctan_c(dx: i32, dy: i32) -> u16 {
     math::arctan(dx, dy)
 }
 
 #[no_mangle]
-pub extern fn sine_c(angle: u16) -> i16 {
+pub extern "C" fn sine_c(angle: u16) -> i16 {
     math::sine(angle)
 }
 
 #[no_mangle]
-pub extern fn cosine_c(angle: u16) -> i16 {
+pub extern "C" fn cosine_c(angle: u16) -> i16 {
     math::cosine(angle)
 }
 
 #[no_mangle]
-pub extern fn rotate_point_c(x: &mut i16, y: &mut i16, angle: u16) {
+pub extern "C" fn rotate_point_c(x: &mut i16, y: &mut i16, angle: u16) {
     let (nx, ny) = math::rotate_point(*x, *y, angle);
     *x = nx;
     *y = ny;
@@ -499,7 +499,7 @@ pub struct Line {
 }
 
 #[no_mangle]
-pub extern fn calculate_line_intersection(a: *const Line, b: *const Line, out: *mut ShortVec) -> c_int {
+pub extern "C" fn calculate_line_intersection(a: *const Line, b: *const Line, out: *mut ShortVec) -> c_int {
     let a = unsafe { a.as_ref().unwrap() };
     let b = unsafe { b.as_ref().unwrap() };
     let (intersects, o) = math::line_intersection(((a.p0.x, a.p0.y), (a.p1.x, a.p1.y)),
@@ -516,7 +516,7 @@ pub extern fn calculate_line_intersection(a: *const Line, b: *const Line, out: *
 }
 
 #[no_mangle]
-pub extern fn calculate_line_intersection_helper(a: i16, b: i16, c: i16) -> c_int {
+pub extern "C" fn calculate_line_intersection_helper(a: i16, b: i16, c: i16) -> c_int {
     let intersects = math::line_intersection_helper(a, b, c);
 
     if intersects { 1 } else { 0 }
@@ -527,7 +527,7 @@ static mut PART_IMAGE_SIZES: Vec<(i16, i16)> = vec![];
 // Returns true if a valid image size was found.
 // Returns false otherwise. size_out is unchanged in this case.
 #[no_mangle]
-pub extern fn part_image_size(part_type: c_int, index: u16, out: *mut ShortVec) -> c_int {
+pub extern "C" fn part_image_size(part_type: c_int, index: u16, out: *mut ShortVec) -> c_int {
     // relies on global variables for now, because the original game did.
 
     // In TIMWIN, this value comes from (pseudocode):
@@ -605,7 +605,7 @@ pub extern fn part_image_size(part_type: c_int, index: u16, out: *mut ShortVec) 
 /// Was pre-calculated in TIM each time the air pressure or gravity changed. Here we recalculate it each time.
 /// We can possibly memoize this call in the future if performance calls for it.
 #[no_mangle]
-pub fn part_acceleration(part_type: c_int) -> i16 {
+pub extern "C" fn part_acceleration(part_type: c_int) -> i16 {
     match PartType::from_u16(part_type as u16) {
         PartType::GunBullet => 0,
         PartType::Eightball => 0,
@@ -617,7 +617,7 @@ pub fn part_acceleration(part_type: c_int) -> i16 {
 /// Was pre-calculated in TIM each time the air pressure or gravity changed. Here we recalculate it each time.
 /// We can possibly memoize this call in the future if performance calls for it.
 #[no_mangle]
-pub fn part_terminal_velocity(part_type: c_int) -> i16 {
+pub extern "C" fn part_terminal_velocity(part_type: c_int) -> i16 {
     match PartType::from_u16(part_type as u16) {
         PartType::GunBullet => 0x3000,
         PartType::CannonBall => 0x3000,
@@ -626,31 +626,31 @@ pub fn part_terminal_velocity(part_type: c_int) -> i16 {
 }
 
 #[no_mangle]
-pub fn part_density(part_type: c_int) -> u16 {
+pub extern "C" fn part_density(part_type: c_int) -> u16 {
     let t = PartType::from_u16(part_type as u16);
     parts::get_def(t).density
 }
 
 #[no_mangle]
-pub fn part_mass(part_type: c_int) -> u16 {
+pub extern "C" fn part_mass(part_type: c_int) -> u16 {
     let t = PartType::from_u16(part_type as u16);
     parts::get_def(t).mass
 }
 
 #[no_mangle]
-pub fn part_bounciness(part_type: c_int) -> i16 {
+pub extern "C" fn part_bounciness(part_type: c_int) -> i16 {
     let t = PartType::from_u16(part_type as u16);
     parts::get_def(t).bounciness
 }
 
 #[no_mangle]
-pub fn part_friction(part_type: c_int) -> i16 {
+pub extern "C" fn part_friction(part_type: c_int) -> i16 {
     let t = PartType::from_u16(part_type as u16);
     parts::get_def(t).friction
 }
 
 #[no_mangle]
-pub fn part_order(part_type: c_int) -> u16 {
+pub extern "C" fn part_order(part_type: c_int) -> u16 {
     let t = PartType::from_u16(part_type as u16);
     let list = parts::parts_bin_order();
 
@@ -658,33 +658,33 @@ pub fn part_order(part_type: c_int) -> u16 {
 }
 
 #[no_mangle]
-pub fn part_data30_flags1(part_type: c_int) -> u16 {
+pub extern "C" fn part_data30_flags1(part_type: c_int) -> u16 {
     let t = PartType::from_u16(part_type as u16);
     parts::get_def(t).flags1
 }
 
 #[no_mangle]
-pub fn part_data30_flags3(part_type: c_int) -> u16 {
+pub extern "C" fn part_data30_flags3(part_type: c_int) -> u16 {
     let t = PartType::from_u16(part_type as u16);
     parts::get_def(t).flags3
 }
 
 #[no_mangle]
-pub fn part_data30_size_something2(part_type: c_int) -> ShortVec {
+pub extern "C" fn part_data30_size_something2(part_type: c_int) -> ShortVec {
     let t = PartType::from_u16(part_type as u16);
     let (w, h) = parts::get_def(t).size_something2;
     ShortVec { x: w as i16, y: h as i16 }
 }
 
 #[no_mangle]
-pub fn part_data30_size(part_type: c_int) -> ShortVec {
+pub extern "C" fn part_data30_size(part_type: c_int) -> ShortVec {
     let t = PartType::from_u16(part_type as u16);
     let (w, h) = parts::get_def(t).size;
     ShortVec { x: w as i16, y: h as i16 }
 }
 
 #[no_mangle]
-pub fn part_data31_render_pos_offset(part_type: c_int, state1: u16, out: &mut SByteVec) -> c_int {
+pub extern "C" fn part_data31_render_pos_offset(part_type: c_int, state1: u16, out: &mut SByteVec) -> c_int {
     let t = PartType::from_u16(part_type as u16);
     if let Some(offsets) = parts::get_def(t).render_pos_offsets {
         let (x, y) = offsets[state1 as usize];
@@ -697,7 +697,7 @@ pub fn part_data31_render_pos_offset(part_type: c_int, state1: u16, out: &mut SB
 }
 
 #[no_mangle]
-pub fn part_explicit_size(part_type: c_int, index: u16, out: &mut ShortVec) -> c_int {
+pub extern "C" fn part_explicit_size(part_type: c_int, index: u16, out: &mut ShortVec) -> c_int {
     let t = PartType::from_u16(part_type as u16);
     if let Some(sizes) = parts::get_def(t).explicit_sizes {
         let (w, h) = sizes[index as usize];
@@ -710,7 +710,7 @@ pub fn part_explicit_size(part_type: c_int, index: u16, out: &mut ShortVec) -> c
 }
 
 #[no_mangle]
-pub fn part_run(part: &mut Part) {
+pub extern "C" fn part_run(part: &mut Part) {
     let t = PartType::from_u16(part.part_type as u16);
     if let Some(run) = parts::get_def(t).run_fn {
         run(part);
@@ -718,7 +718,7 @@ pub fn part_run(part: &mut Part) {
 }
 
 #[no_mangle]
-pub fn part_reset(part: &mut Part) {
+pub extern "C" fn part_reset(part: &mut Part) {
     let t = PartType::from_u16(part.part_type as u16);
     if let Some(reset) = parts::get_def(t).reset_fn {
         reset(part);
@@ -726,7 +726,7 @@ pub fn part_reset(part: &mut Part) {
 }
 
 #[no_mangle]
-pub fn part_bounce(part_type: c_int, part: &mut Part) -> c_int {
+pub extern "C" fn part_bounce(part_type: c_int, part: &mut Part) -> c_int {
     let t = PartType::from_u16(part_type as u16);
     if let Some(bounce) = parts::get_def(t).bounce_fn {
         if bounce(part) {
@@ -741,7 +741,7 @@ pub fn part_bounce(part_type: c_int, part: &mut Part) -> c_int {
 }
 
 #[no_mangle]
-pub fn part_flip(part: &mut Part, orientation: c_int) {
+pub extern "C" fn part_flip(part: &mut Part, orientation: c_int) {
     let t = PartType::from_u16(part.part_type as u16);
     if let Some(flip) = parts::get_def(t).flip_fn {
         flip(part, orientation as u16);
@@ -749,7 +749,7 @@ pub fn part_flip(part: &mut Part, orientation: c_int) {
 }
 
 #[no_mangle]
-pub fn part_resize(part: &mut Part) {
+pub extern "C" fn part_resize(part: &mut Part) {
     let t = PartType::from_u16(part.part_type as u16);
     if let Some(resize) = parts::get_def(t).resize_fn {
         resize(part);
@@ -757,7 +757,7 @@ pub fn part_resize(part: &mut Part) {
 }
 
 #[no_mangle]
-pub fn part_rope(part_type: c_int, p1: &mut Part, p2: &mut Part, rope_slot: c_int, flags: u16, p1_mass: i16, p1_force: i32) -> c_int {
+pub extern "C" fn part_rope(part_type: c_int, p1: &mut Part, p2: &mut Part, rope_slot: c_int, flags: u16, p1_mass: i16, p1_force: i32) -> c_int {
     let t = PartType::from_u16(part_type as u16);
     if let Some(rope) = parts::get_def(t).rope_fn {
         rope(p1, p2, rope_slot as u8, flags, p1_mass, p1_force) as c_int
@@ -768,7 +768,7 @@ pub fn part_rope(part_type: c_int, p1: &mut Part, p2: &mut Part, rope_slot: c_in
 }
 
 #[no_mangle]
-pub fn part_create_func(part_type: c_int, part: &mut Part) -> c_int {
+pub extern "C" fn part_create_func(part_type: c_int, part: &mut Part) -> c_int {
     let t = PartType::from_u16(part_type as u16);
     let create = parts::get_def(t).create_fn;
 

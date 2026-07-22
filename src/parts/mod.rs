@@ -396,7 +396,7 @@ mod teeter_totter {
 
     // export to C
     #[no_mangle]
-    pub extern fn teeter_totter_reset(part: &mut Part) {
+    pub extern "C" fn teeter_totter_reset(part: &mut Part) {
         reset(part);
     }
 
@@ -744,7 +744,7 @@ mod mort_the_mouse_cage {
     }
 
     #[no_mangle]
-    fn mort_the_mouse_cage_start(part: &mut Part) {
+    extern "C" fn mort_the_mouse_cage_start(part: &mut Part) {
         make_it_go(part);
     }
 }
@@ -1459,7 +1459,7 @@ mod bob_the_fish {
     }
 
     #[no_mangle]
-    fn bob_the_fish_break_bowl(part: &mut Part) {
+    extern "C" fn bob_the_fish_break_bowl(part: &mut Part) {
         break_bowl(part);
     }
 }
@@ -4469,9 +4469,13 @@ mod implemented_tests {
     use super::*;
     use crate::part::PartType;
     use std::convert::TryFrom;
+    use std::panic::AssertUnwindSafe;
 
-    /// Create every part type and see which ones actually panic, then compare against
-    /// `is_implemented`. Keeps the hand-written list honest.
+    /// Run every part's create and reset callbacks and see which ones actually panic, then
+    /// compare against `is_implemented`. Keeps the hand-written list honest.
+    ///
+    /// The callbacks are invoked directly rather than through C's part_new, because a panic
+    /// unwinding out of an `extern "C"` function aborts instead of being catchable.
     #[test]
     fn implemented_matches_reality() {
         let previous = std::panic::take_hook();
@@ -4483,15 +4487,25 @@ mod implemented_tests {
                 Ok(t) => t,
                 Err(_) => continue,
             };
-            // part_new runs the part's create and reset callbacks.
-            let actually_works = std::panic::catch_unwind(|| unsafe {
-                crate::tim_c::part_new(raw as std::os::raw::c_int)
-            })
+
+            let actually_works = std::panic::catch_unwind(AssertUnwindSafe(|| {
+                // part_alloc returns a zeroed Part; leaking it is fine for a test.
+                let part = unsafe { crate::tim_c::part_alloc().as_mut().unwrap() };
+                part.part_type = raw;
+                part.size = crate::tim_c::part_data30_size(raw as std::os::raw::c_int);
+                part.size_something2 = part.size;
+
+                let def = get_def(part_type);
+                (def.create_fn)(part);
+                if let Some(reset) = def.reset_fn {
+                    reset(part);
+                }
+            }))
             .is_ok();
 
             if actually_works != is_implemented(part_type) {
                 wrong.push(format!(
-                    "{:?}: is_implemented() says {}, but creating it {}",
+                    "{:?}: is_implemented() says {}, but create/reset {}",
                     part_type,
                     is_implemented(part_type),
                     if actually_works { "worked" } else { "panicked" }
