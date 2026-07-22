@@ -174,7 +174,10 @@ u16 part_order(enum PartType type);
 s16 part_acceleration(enum PartType type);
 s16 part_terminal_velocity(enum PartType type);
 int part_data31_render_pos_offset(enum PartType type, u16 state1, struct SByteVec *out);
-bool part_explicit_size(enum PartType type, u16 index, struct ShortVec *size_out);
+// Rust (src/tim_c.rs) returns c_int (0/1 flag), not a genuine predicate. This codebase's
+// `bool` is `typedef int bool` (c_src/int.h), so this was ABI-compatible only by chance;
+// declared `int` so scripts/check-ffi-signatures.py can verify it for real.
+int part_explicit_size(enum PartType type, u16 index, struct ShortVec *size_out);
 
 
 enum LevelState {

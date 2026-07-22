@@ -9,7 +9,9 @@ void stub_10a8_280a(struct Part *part, int c);
 void stub_10a8_2b6d(struct Part *part, int c);
 void stub_10a8_21cb(struct Part *part, u8 c);
 int stub_1050_02db(struct Part *part);
-bool calculate_line_intersection(const struct Line *a, const struct Line *b, struct ShortVec *out);
+// Rust (src/tim_c.rs) returns c_int, not a genuine bool -- see the matching comment above
+// the redeclaration in c_src/main.c.
+int calculate_line_intersection(const struct Line *a, const struct Line *b, struct ShortVec *out);
 struct Part* part_new(enum PartType type);
 void insert_part_into_static_parts(struct Part *part);
 void insert_part_into_moving_parts(struct Part *part);

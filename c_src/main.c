@@ -4,9 +4,13 @@
 #include "tim.h"
 
 u16 arctan_c(s32 dx, s32 dy);
-bool calculate_line_intersection_helper(s16 a, s16 b, s16 c);
-bool calculate_line_intersection(const struct Line *a, const struct Line *b, struct ShortVec *out);
-bool part_image_size(enum PartType type, u16 index, struct ShortVec *size_out);
+// Rust (src/tim_c.rs) returns c_int (0/1), matching part_bounce/part_create_func/part_rope's
+// established "int flag" convention, not a genuine predicate -- `bool` here (this codebase's
+// `bool` is `typedef int bool;`, see c_src/int.h) was ABI-compatible only by chance (both are
+// 4-byte ints); declared as `int` so scripts/check-ffi-signatures.py can verify it for real.
+int calculate_line_intersection_helper(s16 a, s16 b, s16 c);
+int calculate_line_intersection(const struct Line *a, const struct Line *b, struct ShortVec *out);
+int part_image_size(enum PartType type, u16 index, struct ShortVec *size_out);
 
 static inline s16 utos(u16 v) {
     // Unsigned->signed conversion for integers with the same number of bits is undefined in C.

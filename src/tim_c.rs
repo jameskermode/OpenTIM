@@ -1331,9 +1331,11 @@ pub extern "C" fn part_density(part_type: c_int) -> u16 {
 }
 
 #[no_mangle]
-pub extern "C" fn part_mass(part_type: c_int) -> u16 {
+pub extern "C" fn part_mass(part_type: c_int) -> i16 {
     let t = PartType::from_u16(part_type as u16);
-    parts::get_def(t).mass
+    // PartDef stores mass as u16; the C prototype and Part.mass are both s16. Every mass in
+    // the table is <= 28000, so this cast is the identity.
+    parts::get_def(t).mass as i16
 }
 
 #[no_mangle]

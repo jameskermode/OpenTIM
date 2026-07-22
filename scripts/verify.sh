@@ -160,6 +160,18 @@ if [ -n "$TIMWIN_MISSING" ]; then
     FAIL=1
 fi
 
+echo "== FFI signature agreement between C prototypes and Rust extern \"C\" definitions =="
+# The C compiler validates call sites against whatever prototype is in scope; rustc
+# validates the Rust function against its own signature; nothing compares the two against
+# each other. A mismatched `bool` vs `int` return, or a dropped/extra parameter, compiles
+# cleanly on both sides and silently corrupts data at the FFI boundary -- this project has
+# already been bitten by exactly this class of bug once (commit 28c6ba5, an ABI mismatch
+# that made the simulation depend on optimisation level). This is pure source analysis (no
+# build, no game data), so it belongs here rather than after the build/game-data gate below.
+if ! python3 scripts/check-ffi-signatures.py; then
+    FAIL=1
+fi
+
 echo "== build =="
 cargo build --quiet
 cargo build --quiet --release
