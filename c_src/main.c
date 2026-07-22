@@ -114,21 +114,7 @@ void initialize_llamas() {
     }
 }
 
-/* TIMWIN: 10a8:0290
-   Accurate */
-void four_points_adjust_p1_by_one(struct Line *points) {
-    if (points->p1.x < points->p0.x) {
-        points->p1.x -= 1;
-    } else if (points->p1.x > points->p0.x) {
-        points->p1.x += 1;
-    }
-
-    if (points->p1.y < points->p0.y) {
-        points->p1.y -= 1;
-    } else if (points->p1.y > points->p0.y) {
-        points->p1.y += 1;
-    }
-}
+// four_points_adjust_p1_by_one has moved to Rust (src/tim_c.rs).
 
 static inline void calculate_border_normal_segment(struct BorderPoint *a, struct BorderPoint *b) {
     struct Line p = { { a->x, a->y }, { b->x, b->y } };

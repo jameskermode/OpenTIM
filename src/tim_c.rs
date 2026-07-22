@@ -805,6 +805,36 @@ pub struct Line {
     p1: ShortVec,
 }
 
+/// TIMWIN: 10a8:0290
+/// Accurate
+///
+/// Safety: `points` is dereferenced unconditionally, exactly matching the C (no null check
+/// there either); every call site passes the address of a live, stack-allocated `Line`, so
+/// there is no null path to preserve.
+///
+/// The `+1`/`-1` adjustments are computed in `i32` (mirroring C's promotion of the `i16`
+/// operand to `int` before the arithmetic) and then cast back down with `as i16`, which
+/// truncates/wraps two's-complement on the boundary case (e.g. `p1.x == i16::MIN - 1`)
+/// exactly like C's implementation-defined narrowing conversion on assignment back to the
+/// `s16` lvalue — using plain `i16` `-=`/`+=` here would instead panic on overflow in a debug
+/// build, which the C never did.
+#[no_mangle]
+pub extern "C" fn four_points_adjust_p1_by_one(points: *mut Line) {
+    unsafe {
+        if (*points).p1.x < (*points).p0.x {
+            (*points).p1.x = ((*points).p1.x as i32 - 1) as i16;
+        } else if (*points).p1.x > (*points).p0.x {
+            (*points).p1.x = ((*points).p1.x as i32 + 1) as i16;
+        }
+
+        if (*points).p1.y < (*points).p0.y {
+            (*points).p1.y = ((*points).p1.y as i32 - 1) as i16;
+        } else if (*points).p1.y > (*points).p0.y {
+            (*points).p1.y = ((*points).p1.y as i32 + 1) as i16;
+        }
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn calculate_line_intersection(a: *const Line, b: *const Line, out: *mut ShortVec) -> c_int {
     let a = unsafe { a.as_ref().unwrap() };
