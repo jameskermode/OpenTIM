@@ -242,35 +242,7 @@ void part_update_vel_and_force(struct Part *part) {
 
 // part_get_movement_delta_angle has moved to Rust (src/tim_c.rs).
 
-/* TIMWIN: 10a8:176f
-  Accurate */
-void update_rope_pos(struct RopeData *rope) {
-    if (!rope->part1) return;
-
-    struct Part *part1 = rope->part1;
-    rope->ends_pos[0].x = part1->pos_render.x + part1->rope_loc[rope->part1_rope_slot].x;
-    rope->ends_pos[0].y = part1->pos_render.y + part1->rope_loc[rope->part1_rope_slot].y;
-
-    if (rope->part2) {
-        struct Part *part2 = rope->part2;
-        rope->ends_pos[1].x = part2->pos_render.x + part2->rope_loc[rope->part2_rope_slot].x;
-        rope->ends_pos[1].y = part2->pos_render.y + part2->rope_loc[rope->part2_rope_slot].y;
-    }
-
-    struct Part *part = part1->links_to[rope->part1_rope_slot];
-    while (part && part->type == P_PULLEY) {
-        for (int i = 0; i < 2; i++) {
-            part->rope_data[0]->ends_pos[i].x = part->pos.x + part->rope_loc[i].x;
-            part->rope_data[0]->ends_pos[i].y = part->pos.y + part->rope_loc[i].y;
-        }
-        part = part->links_to[0];
-    }
-
-    if (LEVEL_STATE != SIMULATION_MODE) {
-        rope->rope_or_pulley_part->extra1 = approximate_hypot_of_rope(rope, ROPETIME_CURRENT, ROPE_FROM_FIRST);
-        rope->rope_or_pulley_part->extra2 = approximate_hypot_of_rope(rope, ROPETIME_CURRENT, ROPE_FROM_LAST);
-    }
-}
+// update_rope_pos has moved to Rust (src/tim_c.rs).
 
 /* TIMWIN: 10a8:4794 */
 void restore_parts_state_from_design() {

@@ -2253,6 +2253,83 @@ pub extern "C" fn approximate_hypot_of_rope(
     }
 }
 
+/// TIMWIN: 10a8:176f
+/// Accurate
+///
+/// Safety: `rope` is dereferenced unconditionally to read `part1`, matching the C's
+/// unchecked `rope->part1` in the leading `if (!rope->part1) return;` check. Once past that
+/// guard, `part1` is dereferenced unconditionally (matching the C's unchecked
+/// `part1->pos_render`/`part1->rope_loc[...]`); `rope->part2` gets one explicit null check
+/// before being dereferenced, exactly matching the C's `if (rope->part2) { ... }`. The
+/// pulley walk dereferences `part` only inside the `while (part && part->type == P_PULLEY)`
+/// condition/body, matching the C exactly, and dereferences `part->rope_data[0]`
+/// unconditionally inside that body -- matching the C's unchecked
+/// `part->rope_data[0]->ends_pos[i]`, which relies on every live `P_PULLEY` part having a
+/// populated primary `rope_data[0]` (the same invariant `approximate_hypot_of_rope` and
+/// `part_set_prev_vars` rely on elsewhere in this file). `rope->rope_or_pulley_part` is
+/// dereferenced unconditionally in the trailing block, matching the C's unchecked
+/// `rope->rope_or_pulley_part->extra1 = ...` (no null check there either).
+///
+/// Each `ends_pos`/pulley-loop update mirrors C's integer promotion exactly: `pos_render.x`/
+/// `pos.x` (`i16`) and `rope_loc[...].x` (`byte`/`u8`, always zero-extending since it is
+/// unsigned) both promote to `i32` for the addition, and only the sum truncates back to
+/// `i16` on assignment to `ends_pos[...]`, matching the C's `s16 = s16 + byte` arithmetic
+/// (computed in `int`, truncated once on assignment, not truncated mid-expression).
+/// `extra1`/`extra2` are assigned directly from `approximate_hypot_of_rope`'s `i16` return
+/// with no extra truncation needed, matching the C (`s16 = s16`).
+///
+/// Gate-exercised: partially. Ropes and pulleys are present in the test levels, and this is
+/// called every tick for every rope (via still-C callers in `main.c`), so the `part1`
+/// non-null path, the `part2`-present path, and the pulley-chain loop are exercised by the
+/// golden-baseline comparisons. The `LEVEL_STATE != SIMULATION_MODE` `extra1`/`extra2` block
+/// is NOT exercised by those comparisons: the gate's baseline harness ticks levels with
+/// `LEVEL_STATE == SIMULATION_MODE`, so that branch is always false during a gate run and its
+/// correctness rests only on reading the C. The `!rope->part1` and `!rope->part2` early-outs
+/// are likewise not specifically confirmed hit/not-hit by the gate; they rest on reading the C.
+#[no_mangle]
+pub extern "C" fn update_rope_pos(rope: *mut RopeData) {
+    unsafe {
+        if (*rope).part1.is_null() {
+            return;
+        }
+
+        let part1 = (*rope).part1;
+        let slot1 = (*rope).part1_rope_slot as usize;
+        (*rope).ends_pos[0].x =
+            ((*part1).pos_render.x as i32 + (*part1).rope_loc[slot1].x as i32) as i16;
+        (*rope).ends_pos[0].y =
+            ((*part1).pos_render.y as i32 + (*part1).rope_loc[slot1].y as i32) as i16;
+
+        if !(*rope).part2.is_null() {
+            let part2 = (*rope).part2;
+            let slot2 = (*rope).part2_rope_slot as usize;
+            (*rope).ends_pos[1].x =
+                ((*part2).pos_render.x as i32 + (*part2).rope_loc[slot2].x as i32) as i16;
+            (*rope).ends_pos[1].y =
+                ((*part2).pos_render.y as i32 + (*part2).rope_loc[slot2].y as i32) as i16;
+        }
+
+        let mut part = (*part1).links_to[slot1];
+        while !part.is_null() && (*part).part_type == PartType::Pulley as u16 {
+            for i in 0..2 {
+                let rd = (*part).rope_data[0];
+                (*rd).ends_pos[i].x =
+                    ((*part).pos.x as i32 + (*part).rope_loc[i].x as i32) as i16;
+                (*rd).ends_pos[i].y =
+                    ((*part).pos.y as i32 + (*part).rope_loc[i].y as i32) as i16;
+            }
+            part = (*part).links_to[0];
+        }
+
+        if crate::globals::LEVEL_STATE != 0x2000 /* SIMULATION_MODE */ {
+            (*(*rope).rope_or_pulley_part).extra1 =
+                approximate_hypot_of_rope(rope, 3 /* ROPETIME_CURRENT */, 0 /* ROPE_FROM_FIRST */);
+            (*(*rope).rope_or_pulley_part).extra2 =
+                approximate_hypot_of_rope(rope, 3 /* ROPETIME_CURRENT */, 1 /* ROPE_FROM_LAST */);
+        }
+    }
+}
+
 /// TIMWIN: 10a8:376e
 /// Note: I double-checked this for accuracy
 ///
