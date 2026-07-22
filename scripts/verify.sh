@@ -61,11 +61,89 @@ echo "== C compiler diagnostics (implicit declarations / incompatible pointer ty
 # not depend on incremental build caching -- it always re-parses every C file.
 C_SOURCES="c_src/foo.c c_src/globals.c c_src/main.c c_src/part_defs.c c_src/draw_rope.c"
 C_DIAG="$VERIFY_TMP/c_diagnostics.txt"
-cc -Wall -Wextra -fsyntax-only $C_SOURCES > "$C_DIAG" 2>&1 || true
+# Use the same compiler the real build uses: the `cc` crate honours a `CC` env var override,
+# so hardcoding `cc` here would let this check silently diagnose a different compiler than
+# the one that actually built the binaries being verified.
+"${CC:-cc}" -Wall -Wextra -fsyntax-only $C_SOURCES > "$C_DIAG" 2>&1 || true
 C_BAD_DIAGS="$(grep -E '\[-W(implicit-function-declaration|incompatible-pointer-types)\]' "$C_DIAG" || true)"
 if [ -n "$C_BAD_DIAGS" ]; then
     echo "  FAIL C compiler emitted implicit-function-declaration or incompatible-pointer-types warnings:"
     echo "$C_BAD_DIAGS" | sed 's/^/    /'
+    FAIL=1
+fi
+
+echo "== TIMWIN provenance tags on ported functions (src/tim_c.rs) =="
+# Every ported function carries a `TIMWIN: segment:offset` doc-comment tag -- the ONLY
+# cross-reference from the Rust back to the original disassembled binary. Losing that tag
+# loses the function's provenance. This has happened silently twice: a new function's doc
+# comment was written directly beneath the previous function's doc comment with no blank
+# line between them, so rustdoc merges both `///` blocks onto the second function, leaving
+# the first with no doc comment and no tag at all. This check catches that (and any other
+# untagged export) mechanically instead of relying on someone noticing during review.
+#
+# A handful of exported functions are project infrastructure rather than ports of original
+# TIM code, so they legitimately have no TIMWIN tag. That set was established by manually
+# auditing every `#[no_mangle] pub extern "C" fn` in src/tim_c.rs as of 2026-07-22 (see the
+# task that added this check); it must only grow for the same reason -- a NEW omission
+# should fail, not get silently added here.
+TIMWIN_ALLOWLIST="unimplemented output_c output_part_c output_int_c arctan_c sine_c \
+cosine_c rotate_point_c calculate_line_intersection calculate_line_intersection_helper \
+belt_data_alloc rope_data_alloc debug_part_size part_image_size part_density part_mass \
+part_bounciness part_friction part_order part_data30_flags1 part_data30_flags3 \
+part_data30_size_something2 part_data30_size part_data31_render_pos_offset \
+part_explicit_size part_run part_reset part_bounce part_flip part_resize part_rope \
+part_create_func"
+
+TIMWIN_MISSING="$(awk -v allow="$TIMWIN_ALLOWLIST" '
+BEGIN {
+    n = split(allow, arr, " ")
+    for (i = 1; i <= n; i++) {
+        name = arr[i]
+        gsub(/^[ \t]+|[ \t]+$/, "", name)
+        if (name != "") allowed[name] = 1
+    }
+    doc_tag = 0
+    pending = 0
+}
+{
+    t = $0
+    gsub(/^[ \t]+|[ \t]+$/, "", t)
+
+    if (t ~ /^\/\/\//) {
+        if (t ~ /TIMWIN/) doc_tag = 1
+        next
+    }
+
+    if (t == "#[no_mangle]") {
+        pending = 1
+        pending_tag = doc_tag
+        doc_tag = 0
+        next
+    }
+
+    if (pending == 1 && t ~ /^pub extern "C" fn /) {
+        name = t
+        sub(/^pub extern "C" fn[ \t]+/, "", name)
+        sub(/[ \t(].*/, "", name)
+        if (pending_tag == 0 && !(name in allowed)) {
+            print name
+        }
+        pending = 0
+        doc_tag = 0
+        next
+    }
+
+    # Any other line (including a blank one) breaks doc-comment contiguity and cancels a
+    # dangling #[no_mangle] that was not immediately followed by the fn signature.
+    doc_tag = 0
+    pending = 0
+}
+' src/tim_c.rs)"
+
+if [ -n "$TIMWIN_MISSING" ]; then
+    echo "  FAIL these exported functions in src/tim_c.rs have no TIMWIN: tag in the doc"
+    echo "  comment immediately above them, and are not in the allowlist:"
+    echo "$TIMWIN_MISSING" | sed 's/^/    /'
     FAIL=1
 fi
 

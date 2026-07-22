@@ -821,16 +821,6 @@ pub extern "C" fn get_first_part(choice: c_int) -> *mut Part {
     }
 }
 
-/// TIMWIN: 1090:158b
-/// Accurate
-///
-/// Safety: `bucket` is dereferenced unconditionally, exactly matching the C (no null check
-/// there either) -- every call site passes a currently-processed, live part (e.g. `part` /
-/// `PART_3a6c` while `part->bounce_part` / `PART_3a6a` are known non-null). The
-/// `EACH_INTERACION` walk only dereferences `curpart` after checking it against null in the
-/// loop condition (mirroring the C macro's `varname != 0` loop test), so every node visited
-/// is guaranteed live. `contains` is only ever compared by pointer value, never
-/// dereferenced, so it may safely be null.
 /// TIMWIN: 10a8:03ac
 ///
 /// Safety: no pointer is ever touched here. `a` and `b` are plain `enum PartType` values
@@ -859,6 +849,16 @@ pub extern "C" fn should_parts_skip_collision(a: c_int, b: c_int) -> bool {
     false
 }
 
+/// TIMWIN: 1090:158b
+/// Accurate
+///
+/// Safety: `bucket` is dereferenced unconditionally, exactly matching the C (no null check
+/// there either) -- every call site passes a currently-processed, live part (e.g. `part` /
+/// `PART_3a6c` while `part->bounce_part` / `PART_3a6a` are known non-null). The
+/// `EACH_INTERACION` walk only dereferences `curpart` after checking it against null in the
+/// loop condition (mirroring the C macro's `varname != 0` loop test), so every node visited
+/// is guaranteed live. `contains` is only ever compared by pointer value, never
+/// dereferenced, so it may safely be null.
 #[no_mangle]
 pub extern "C" fn bucket_contains(bucket: *mut Part, contains: *mut Part) -> bool {
     unsafe {
@@ -991,19 +991,19 @@ pub extern "C" fn calculate_line_intersection_helper(a: i16, b: i16, c: i16) -> 
 
 /**** Ported UNIMPLEMENTED stubs (still unimplemented; ported to establish the pattern) ****/
 
-/* TIMWIN: 10a8:1329 */
+/// TIMWIN: 10a8:1329
 #[no_mangle]
 pub extern "C" fn stub_10a8_1329(_belt: *mut BeltData) -> c_int {
     unimplemented!("stub_10a8_1329")
 }
 
-/* TIMWIN: 10a8:28a5 */
+/// TIMWIN: 10a8:28a5
 #[no_mangle]
 pub extern "C" fn stub_10a8_28a5(_part: *mut Part, _unused: c_int) {
     unimplemented!("stub_10a8_28a5")
 }
 
-/* TIMWIN: 10a8:0880 */
+/// TIMWIN: 10a8:0880
 #[no_mangle]
 pub extern "C" fn stub_10a8_0880(_a: *mut Part, _b: *mut Part) -> *mut Part {
     unimplemented!("stub_10a8_0880")
