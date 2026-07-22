@@ -144,19 +144,7 @@ struct Part* next_part_or_fallback(struct Part *part, int choice) {
 
 // part_free and part_alloc have moved to Rust (src/tim_c.rs).
 
-void part_free_borders(struct Part *part) {
-    if (part->borders_data) {
-        free(part->borders_data);
-        part->num_borders = 0;
-        part->borders_data = 0;
-    }
-}
-
-void part_alloc_borders(struct Part *part, u16 length) {
-    part_free_borders(part);
-    part->num_borders = length;
-    part->borders_data = malloc(sizeof(struct BorderPoint) * part->num_borders);
-}
+// part_free_borders and part_alloc_borders have moved to Rust (src/tim_c.rs).
 
 // belt_data_alloc and rope_data_alloc have moved to Rust (src/tim_c.rs).
 

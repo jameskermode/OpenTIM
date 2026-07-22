@@ -10,7 +10,6 @@ extern {
     pub fn part_new(part_type: c_int) -> *mut Part;
     pub fn part_init_rope_data_primary(part: *mut Part);
     pub fn part_init_belt_data(part: *mut Part);
-    pub fn part_alloc_borders(part: *mut Part, length: u16);
     pub fn part_calculate_border_normals(part: *mut Part);
     pub fn part_set_size_and_pos_render(part: *mut Part);
     pub fn restore_parts_state_from_design();
@@ -27,11 +26,17 @@ extern {
     pub fn search_for_interactions(part: *mut Part, choice: c_int, search_x_min: i16, search_x_max: i16, search_y_min: i16, search_y_max: i16);
 }
 
-// `part_alloc_borders` (still C, above) allocates `borders_data` with libc `malloc` and is
-// NOT part of this port, so the buffer it hands out must still be released with libc `free`
-// rather than Rust's `dealloc` (which would reconstruct a `Layout` the allocator that made
-// the memory never used). Import `free` itself rather than moving `part_alloc_borders` /
-// `part_free_borders`.
+// `part_alloc_borders` (below) allocates `borders_data` with libc `malloc`, so it must stay
+// released with libc `free` rather than Rust's `dealloc`: `dealloc` requires the exact
+// `Layout` the allocation used, but `borders_data`'s length (`part->num_borders`) can be
+// shrunk in place after allocation (see `update_border_ignore_normals_quirk` in `impl Part`)
+// without reallocating, so by the time a part is freed `num_borders` may no longer match the
+// original allocation size -- reconstructing a `Layout` from it and calling `dealloc` would
+// be unsound. `malloc`/`free` have no such requirement (`free` recovers the block's real size
+// itself, whether from glibc/libSystem's own bookkeeping on native or from the 16-byte header
+// `src/wasm_libc.rs` prepends on wasm), so importing `free`/`malloc` directly and using them
+// on both the allocating and freeing side is the one allocator-consistent choice that works
+// unmodified on both native and wasm.
 //
 // `initialize_llamas` (below) uses the same libc `malloc`/`free` pair for `struct Llama`
 // nodes, for the same reason: other code (e.g. `llama2_insert_by_force`, formerly
@@ -69,7 +74,8 @@ pub extern "C" fn part_alloc() -> *mut Part {
 ///
 /// Ownership rules preserved exactly from the C:
 ///   - `borders_data`: always freed here if non-null. It is allocated by `part_alloc_borders`
-///     (still C, using `malloc`), so it is released with libc `free`, not Rust `dealloc`.
+///     (below) using libc `malloc`, so it is released with libc `free`, not Rust `dealloc`
+///     (see the comment on the `malloc`/`free` extern block above for why).
 ///   - `belt_data`: freed only when flag `F2_0001` is clear, matching the C's
 ///     `NO_FLAGS(part->flags2, F2_0001)`. When the flag is set this part merely points at a
 ///     belt buffer owned by another part, so freeing it here would be a double free.
@@ -101,6 +107,63 @@ pub extern "C" fn part_free(part: *mut Part) {
 
         let layout = std::alloc::Layout::new::<Part>();
         std::alloc::dealloc(part as *mut u8, layout);
+    }
+}
+
+/// This C source line never carried a `TIMWIN: seg:off` tag (checked against the original,
+/// pre-Rust C transliteration): decompiling the per-part-type `reset_fn`s that call
+/// `part.set_border(...)` (e.g. the octagon-shaped part at TIMWIN `1048:051c`, the
+/// wall-shaped parts at TIMWIN `10d0:0e7a`) in Ghidra shows they write straight through
+/// `part->borders_data` with no allocation call beforehand at all -- in the original binary
+/// that pointer was already valid by the time type-specific setup code ran (almost certainly
+/// pointing at a static, per-type table, never freed). `part_alloc_borders`/
+/// `part_free_borders` are this project's own abstraction, invented so a single dynamically-
+/// sized buffer can back every instance regardless of type (needed because, unlike the
+/// original, several OpenTIM part types size their border shape from a runtime `part.size`,
+/// e.g. `wall_common::reset` in `src/parts/mod.rs`). Exempted in
+/// `scripts/verify.sh`'s `TIMWIN_ALLOWLIST` for the same reason as their neighbours
+/// `belt_data_alloc`/`rope_data_alloc` immediately below, which share this exact shape
+/// (allocate-helper with no originating address of its own).
+///
+/// Safety: `part` is dereferenced unconditionally, matching the C (no null check there
+/// either -- every caller passes a live, currently-owned `Part`). `borders_data` is
+/// null-checked before both the `free` call and the field writes, matching the C's `if
+/// (part->borders_data) { ... }` guard exactly.
+#[no_mangle]
+pub extern "C" fn part_free_borders(part: *mut Part) {
+    unsafe {
+        if !(*part).borders_data.is_null() {
+            free((*part).borders_data as *mut std::os::raw::c_void);
+            (*part).num_borders = 0;
+            (*part).borders_data = std::ptr::null_mut();
+        }
+    }
+}
+
+/// See `part_free_borders` immediately above for why this has no `TIMWIN` tag and is
+/// exempted in `scripts/verify.sh`'s `TIMWIN_ALLOWLIST`.
+///
+/// Safety: `part` is dereferenced unconditionally, matching the C (no null check there
+/// either). This calls `part_free_borders` first, exactly matching the C, so any
+/// previously-owned `borders_data` buffer is released (with the same libc `free` used here)
+/// before being overwritten -- no leak of a prior allocation.
+///
+/// `length` (`u16`) is widened to `usize` before multiplying by `size_of::<BorderPoint>()`
+/// (4, matching the C's `sizeof(struct BorderPoint)`), mirroring the C's `size_t` arithmetic
+/// (`sizeof(...) * part->num_borders`, where `num_borders` promotes to the wider `size_t`);
+/// the maximum possible product (65535 * 4 = 262140) fits comfortably with no overflow on
+/// either side. The result is passed straight to `malloc`: when `length` is `0` this calls
+/// `malloc(0)`, exactly as the C did (no added zero-length special case), so the pointer this
+/// returns -- null or not -- matches whatever the platform's `malloc(0)` would return for the
+/// C, byte for byte on native, and via `src/wasm_libc.rs`'s explicit `size == 0 -> null` path
+/// on wasm.
+#[no_mangle]
+pub extern "C" fn part_alloc_borders(part: *mut Part, length: u16) {
+    unsafe {
+        part_free_borders(part);
+        (*part).num_borders = length;
+        let size = std::mem::size_of::<BorderPoint>() * length as usize;
+        (*part).borders_data = malloc(size) as *mut BorderPoint;
     }
 }
 

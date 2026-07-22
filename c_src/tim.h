@@ -95,6 +95,8 @@ struct Part* next_part_or_fallback(struct Part *part, int choice);
 // Defined in Rust (src/tim_c.rs).
 struct Part* part_alloc();
 void part_free(struct Part *part);
+void part_free_borders(struct Part *part);
+void part_alloc_borders(struct Part *part, u16 length);
 struct BeltData* belt_data_alloc();
 struct RopeData* rope_data_alloc();
 size_t debug_part_size();
