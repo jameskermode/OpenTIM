@@ -11,6 +11,8 @@ mod part;
 mod parts;
 mod math;
 mod render;
+#[cfg(target_arch = "wasm32")]
+mod wasm_libc;
 #[cfg(feature = "gui")]
 mod nannou;
 pub mod tim_c;
