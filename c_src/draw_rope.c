@@ -98,27 +98,9 @@ s16 calculate_rope_sag(const struct Part *part, const struct RopeData *rope_data
 }
 
 #if ENABLE_TEST_SUITE
-#if 0
-#include <math.h>
-
-void generate_hypot_samples(int n, int max_val) {
-    for (int i = 0; i < n; i++) {
-        s16 result = -1;
-        s16 x;
-        s16 y;
-        do {
-            x = rand() % max_val;
-            y = rand() % max_val;
-            result = approx_hypot(x, y);
-            // some results overflow
-        } while (result < 0);
-
-        float c_result = sqrtf((float)x*(float)x + (float)y*(float)y);
-        float error = (float)result - c_result;
-        printf("ASSERT_EQ(approx_hypot(%5d, %5d), %5d); // Accurate: %8.2f (error = %+.2f%%)\n", x, y, result, c_result, error*100.0f/c_result);
-    }
-}
-#endif
+// generate_hypot_samples(int n, int max_val) used to live here as dev tooling for
+// regenerating the ASSERT_EQ lines below; it has moved to src/tim_c.rs (still gated off of
+// wasm32, and still never compiled here since ENABLE_TEST_SUITE is never defined).
 
 TEST_SUITE(draw_rope) {
     TEST("approx_hypot") {

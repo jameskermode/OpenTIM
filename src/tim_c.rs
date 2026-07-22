@@ -1546,3 +1546,59 @@ pub extern "C" fn bucket_handle_contained_parts(bucket: *mut Part) {
         }
     }
 }
+
+// `rand` is only needed by `generate_hypot_samples` below, which (like the C original) is dead
+// code never compiled into a shipped build. It is deliberately NOT declared for wasm32: the
+// wasm shim (`src/wasm_libc.rs`) never provided a `rand` either, for the same reason -- the C
+// version of this function lived inside `#if ENABLE_TEST_SUITE` / `#if 0`, both of which are
+// never enabled by this project's build, so it was never linked on any target, wasm included.
+#[cfg(not(target_arch = "wasm32"))]
+extern "C" {
+    fn rand() -> c_int;
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// Not a decompiled TIMWIN function -- this is an OpenTIM-authored developer tool that lived
+/// inside `#if ENABLE_TEST_SUITE` and then a further `#if 0` in `c_src/draw_rope.c`.
+/// `ENABLE_TEST_SUITE` is never defined by this project's build, so this function (and the
+/// `#if 0` around it) was never compiled into any build, ever; it existed purely so a developer
+/// could flip the `#if 0` locally and regenerate the `ASSERT_EQ(approx_hypot(...), ...)` lines
+/// checked in just above it in the C. Ported here faithfully anyway, per the porting task's
+/// instructions, but gated off of wasm32 (see the `rand` comment above) since it was never
+/// reachable there either.
+///
+/// Safety: no pointers are involved. `rand() % max_val` truncates C's `int` result down to
+/// `s16` on assignment exactly as the C's implicit narrowing conversion does (including
+/// dividing by zero if `max_val == 0`, unchanged from the C, which invokes the same undefined
+/// behaviour there).
+#[no_mangle]
+pub extern "C" fn generate_hypot_samples(n: c_int, max_val: c_int) {
+    for _ in 0..n {
+        let x: i16;
+        let y: i16;
+        let result: i16;
+        loop {
+            let cur_x = (unsafe { rand() } % max_val) as i16;
+            let cur_y = (unsafe { rand() } % max_val) as i16;
+            let cur_result = approx_hypot(cur_x, cur_y);
+            // some results overflow
+            if cur_result >= 0 {
+                x = cur_x;
+                y = cur_y;
+                result = cur_result;
+                break;
+            }
+        }
+
+        let c_result = ((x as f32) * (x as f32) + (y as f32) * (y as f32)).sqrt();
+        let error = result as f32 - c_result;
+        println!(
+            "ASSERT_EQ(approx_hypot({:5}, {:5}), {:5}); // Accurate: {:8.2} (error = {:+.2}%)",
+            x,
+            y,
+            result,
+            c_result,
+            error * 100.0f32 / c_result
+        );
+    }
+}
