@@ -253,6 +253,16 @@ pub unsafe fn moving_parts_iter<'a>() -> PartsIterator<'a> {
     PartsIterator::new(MOVING_PARTS_ROOT.next)
 }
 
+/// Mutable-parts iterator whose `next()` caches `self.cur = part.next` BEFORE the caller's
+/// loop body runs (see the `Iterator` impl below), unlike the C `for` loops this replaces
+/// (`EACH_STATIC_PART`/`EACH_MOVING_PART`/`EACH_STATIC_THEN_MOVING_PART`), which all
+/// re-read `->next` AFTER the body has executed. The two are equivalent only as long as the
+/// loop body never reassigns the current node's own `next` pointer -- if it did, the C loop
+/// would follow the (possibly new) value written during the body, while this iterator would
+/// already be holding the old value it captured up front. No current caller mutates `next`
+/// during a walk, but any future port of a function that does must NOT drive its loop with
+/// this iterator (or `PartInteractionsIteratorMut`, which has the same caching order for
+/// `interactions`).
 #[derive(Clone)]
 pub struct PartsIteratorMut<'a> {
     cur: *mut Part,
