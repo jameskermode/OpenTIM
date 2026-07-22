@@ -66,6 +66,7 @@ and field.
 | `byte` | `u8` |
 | `bool` | `bool` (C99 `_Bool` is 1 byte, matches Rust) |
 | `enum PartType` | `c_int` (C passes enums as int) |
+| any `enum` global | `u32` — verify with `sizeof`; a bare C enum is 4 bytes here, and a narrower Rust static silently corrupts adjacent memory |
 | `size_t` | `usize` |
 | `struct ShortVec` | `ShortVec` (already `#[repr(C)]` in `tim_c.rs`) |
 
@@ -225,7 +226,7 @@ git commit -m "Add the verification gate for the C to Rust port"
 - Consumes: `scripts/verify.sh` from Task 1.
 - Produces: `opentim::globals` containing every former C global as
   `#[no_mangle] pub static mut <NAME>: <type>`, e.g. `GRAVITY: u16`, `AIR_PRESSURE: u16`,
-  `STATIC_PARTS_ROOT: Part`, `LEVEL_STATE: u16`, `RESIZE_GOPHER: u16`, `SELECTED_PART:
+  `STATIC_PARTS_ROOT: Part`, `LEVEL_STATE: u32`, `RESIZE_GOPHER: u16`, `SELECTED_PART:
   *mut Part`. Later tasks read and write these directly instead of adding `extern`
   declarations one at a time.
 
