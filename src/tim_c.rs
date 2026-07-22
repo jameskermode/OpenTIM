@@ -126,7 +126,7 @@ pub extern "C" fn rope_data_alloc() -> *mut RopeData {
     }
 }
 
-// Only used this for debugging purposes
+/// Only used this for debugging purposes
 ///
 /// Safety: no pointer dereferences at all — just reports a compile-time constant size.
 #[no_mangle]
