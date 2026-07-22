@@ -34,9 +34,10 @@ extern {
 // `part_free_borders`.
 //
 // `initialize_llamas` (below) uses the same libc `malloc`/`free` pair for `struct Llama`
-// nodes, for the same reason: other still-C code (e.g. `stub_10a8_4509`) walks and reorders
-// those same nodes and expects to be able to free ones it never allocated, and vice versa,
-// so every `Llama` allocation anywhere must go through this one allocator.
+// nodes, for the same reason: other code (e.g. `llama2_insert_by_force`, formerly
+// `stub_10a8_4509`, also below) walks and reorders those same nodes and expects to be able
+// to free ones it never allocated, and vice versa, so every `Llama` allocation anywhere must
+// go through this one allocator.
 extern "C" {
     fn free(ptr: *mut std::os::raw::c_void);
     fn malloc(size: usize) -> *mut std::os::raw::c_void;
@@ -157,8 +158,9 @@ pub extern "C" fn remove_part_from_linked_list(part: *mut Part) {
 ///
 /// Safety: `struct Llama` (`c_src/globals.rs`) nodes are allocated and freed here with libc
 /// `malloc`/`free`, matching the C exactly. This is required, not just preserved-for-its-own-
-/// sake: other C code (e.g. `stub_10a8_4509`) still walks and reorders `LLAMA_1`/`LLAMA_2`
-/// nodes, moving them between the two lists without allocating or freeing them itself, so
+/// sake: other code (e.g. `llama2_insert_by_force`, formerly `stub_10a8_4509`, below) still
+/// walks and reorders `LLAMA_1`/`LLAMA_2` nodes, moving them between the two lists without
+/// allocating or freeing them itself, so
 /// whichever allocator creates a node must be the same one every other piece of code (C or
 /// Rust) that might eventually free it uses -- mixing in Rust's `std::alloc`/`dealloc` here
 /// would corrupt the heap the first time C code freed (or this function re-freed) a node
@@ -202,6 +204,73 @@ pub extern "C" fn initialize_llamas() {
             (*o).next = crate::globals::LLAMA_1;
             crate::globals::LLAMA_1 = o;
         }
+    }
+}
+
+/// TIMWIN: 10a8:4509
+/// Accurate
+///
+/// Renamed from `stub_10a8_4509`. Decompiling `10a8:4509` in Ghidra (see
+/// `docs/reverse-engineering-setup.md`) confirms the disassembly matches this logic
+/// instruction-for-instruction: it walks/reorders the two singly linked `Llama` lists
+/// (`LLAMA_1`, the free pool set up by `initialize_llamas`; `LLAMA_2`, the active list)
+/// exactly as described below. Its two call sites (`teeter_totter_bounce` in
+/// `c_src/part_defs.c`, and the rope-to-teeter-totter force propagation code in
+/// `c_src/main.c`) show its purpose: try to schedule `part_b` to be (re-)run this frame
+/// carrying the force `part_a->force`, keeping `LLAMA_2` sorted in descending order of
+/// `force`. If `part_b` is already queued in `LLAMA_2` with an equal-or-higher force this is
+/// a no-op that returns 0; otherwise a free node is moved from `LLAMA_1` into its sorted
+/// position in `LLAMA_2` (recording `part_b` and `force` on it) and this returns 1.
+///
+/// Safety: `part_a` is dereferenced unconditionally for its `force` field, matching the C (no
+/// null check there either). `LLAMA_1`/`LLAMA_2` are walked and mutated exactly as the C does,
+/// including the unconditional dereference of `LLAMA_1` (and its popped head) when moving a
+/// node across -- this assumes the 20-node free pool `initialize_llamas` sets up is never
+/// exhausted, the same assumption the C makes (no null check on `LLAMA_1` before popping its
+/// head there either).
+#[no_mangle]
+pub extern "C" fn llama2_insert_by_force(part_a: *mut Part, part_b: *mut Part) -> c_int {
+    unsafe {
+        let force = (*part_a).force;
+
+        let mut llama2 = crate::globals::LLAMA_2;
+        while !llama2.is_null() {
+            if (*llama2).part == part_b && (*llama2).force >= force {
+                return 0;
+            }
+            llama2 = (*llama2).next;
+        }
+
+        let llama1_head = crate::globals::LLAMA_1;
+
+        if !crate::globals::LLAMA_2.is_null() && (*crate::globals::LLAMA_2).force >= force {
+            let mut insert_point = crate::globals::LLAMA_2;
+
+            let mut cur = (*crate::globals::LLAMA_2).next;
+            while !cur.is_null() {
+                if (*cur).force <= force {
+                    break;
+                }
+                insert_point = cur;
+                cur = (*cur).next;
+            }
+
+            // Pop head of LLAMA_1, insert it AFTER insert_point.
+            let tmp = crate::globals::LLAMA_1;
+            crate::globals::LLAMA_1 = (*crate::globals::LLAMA_1).next;
+            (*tmp).next = (*insert_point).next;
+            (*insert_point).next = tmp;
+        } else {
+            // Pop head of LLAMA_1, prepend to LLAMA_2.
+            let tmp = crate::globals::LLAMA_1;
+            crate::globals::LLAMA_1 = (*crate::globals::LLAMA_1).next;
+            (*tmp).next = crate::globals::LLAMA_2;
+            crate::globals::LLAMA_2 = tmp;
+        }
+
+        (*llama1_head).part = part_b;
+        (*llama1_head).force = force;
+        1
     }
 }
 
@@ -997,6 +1066,106 @@ pub extern "C" fn calculate_line_intersection_helper(a: i16, b: i16, c: i16) -> 
     let intersects = math::line_intersection_helper(a, b, c);
 
     if intersects { 1 } else { 0 }
+}
+
+/// TIMWIN: 1050:025e
+/// Accurate
+///
+/// Renamed from `stub_1050_025e`. Decompiling `1050:025e` in Ghidra confirms this matches
+/// the C exactly (the same `calculate_line_intersection_helper` call, followed by the same
+/// two comparisons against `line.p0.x`/`line.p1.x`). Its only caller (`stub_1050_0550` in
+/// `c_src/main.c`, itself unrenamed) uses it to classify which side of a `line` segment's
+/// x-range a query point `x` falls on, writing the result into the caller's two-flag
+/// `bounce_field_0x86` array (the collision code's own name for that field, of unestablished
+/// deeper meaning) -- both flags are set if `x` lies on the segment itself (per the
+/// intersection-helper check), otherwise exactly one flag is set depending on which side.
+///
+/// Note: the signature was changed slightly from the original, which took a `Part *` and
+/// wrote into its `bounce_field_0x86` field internally; here the 2-byte destination is
+/// passed directly, which every caller already had in hand.
+///
+/// Safety: `line` and `bounce_field_0x86` are dereferenced unconditionally, matching the C
+/// (no null checks there either); every call site passes the address of a live, stack-
+/// allocated `Line` and a live 2-byte array, so there is no null path to preserve.
+#[no_mangle]
+pub extern "C" fn set_bounce_side_flags(line: *mut Line, x: i16, bounce_field_0x86: *mut u8) {
+    unsafe {
+        let p0x = (*line).p0.x;
+        let p1x = (*line).p1.x;
+
+        if calculate_line_intersection_helper(x, p0x, p1x) != 0 {
+            *bounce_field_0x86.add(0) = 1;
+            *bounce_field_0x86.add(1) = 1;
+        }
+
+        if p0x < p1x {
+            if x >= p0x {
+                *bounce_field_0x86.add(0) = 1;
+            } else {
+                *bounce_field_0x86.add(1) = 1;
+            }
+        } else {
+            if x < p1x {
+                *bounce_field_0x86.add(0) = 1;
+            } else {
+                *bounce_field_0x86.add(1) = 1;
+            }
+        }
+    }
+}
+
+/// TIMWIN: 10a8:2bea
+///
+/// Renamed from `stub_10a8_2bea`. Decompiling `10a8:2bea` in Ghidra shows real logic here
+/// (469 bytes, not a stub in the original binary): it converts a world-space `pos`/`size`
+/// (or, when `param3 & 4` is set, two world-space corner points) into screen space using the
+/// scroll-offset globals at `DAT_1108_3c33`/`DAT_1108_3c31`, then walks a global singly
+/// linked list of pending rectangles (headed at `DAT_1108_3be2`, with free nodes drawn from
+/// `DAT_1108_3bde`) to insert the resulting rect, deduplicating against an existing entry
+/// with identical bounds first. This is a "queue a screen rectangle for redraw" primitive --
+/// its only caller in the still-C code (`stub_10a8_28f6`/`queue_rope_dirty_rects`, see below)
+/// uses it exclusively to accumulate the dirty rectangles that need repainting after a rope's
+/// on-screen geometry changes, never to update any `Part` or simulation state.
+///
+/// This project's renderer repaints every frame rather than tracking dirty rectangles, so
+/// (as the prior port already established with the comment this replaces) there is nothing
+/// for this function to do: it is preserved as the exact no-op the C body already was.
+#[no_mangle]
+pub extern "C" fn queue_dirty_rect(
+    _pos: *mut ShortVec,
+    _size: *mut ShortVec,
+    _param3: u8,
+    _param4: u8,
+    _param5: i16,
+) {
+    // Intentionally does nothing -- see doc comment above. Matches the no-op C body it
+    // replaces exactly (no behaviour change).
+}
+
+/// TIMWIN: 10a8:28f6
+///
+/// Renamed from `stub_10a8_28f6`. Decompiling `10a8:28f6` in Ghidra shows real logic here
+/// (631 bytes, not a stub in the original binary): starting from `part->rope_data[0]`, it
+/// walks the rope chain (the same `links_to[rope_slot]` traversal `calculate_rope_sag` in
+/// `c_src/draw_rope.c` uses) and, for each segment, calls `calculate_rope_sag` to get the
+/// segment's sag amount and `queue_dirty_rect` (formerly `stub_10a8_2bea`, see above) to
+/// queue redraw rectangles covering: the rope segment's own previous-frame extent (the two
+/// endpoints from `RopeData::ends_pos_prev1`, expanded by the sag amount), plus a small
+/// 16x16 rectangle centered on each previous-frame endpoint (consistent with erasing a small
+/// anchor/pin sprite drawn at each end). In `SIMULATION_MODE` only the immediate neighbouring
+/// segment(s) are covered; otherwise (design mode) the whole rope/pulley chain is walked.
+/// Every one of these calls only reads `Part`/`RopeData` fields and forwards to
+/// `queue_dirty_rect`, never writing simulation state -- this is a "queue the on-screen
+/// dirty rectangles for a rope's previous-frame appearance" call, made whenever a rope's
+/// geometry changes so the (legacy) renderer knows what needs repainting.
+///
+/// As with `queue_dirty_rect`, this project's renderer does not track dirty rectangles, so
+/// (as the prior port already established) there is nothing for this function to do: it is
+/// preserved as the exact no-op the C body already was.
+#[no_mangle]
+pub extern "C" fn queue_rope_dirty_rects(_part: *mut Part, _unused: c_int) {
+    // Intentionally does nothing -- see doc comment above. Matches the no-op C body it
+    // replaces exactly (no behaviour change).
 }
 
 /**** Ported UNIMPLEMENTED stubs (still unimplemented; ported to establish the pattern) ****/

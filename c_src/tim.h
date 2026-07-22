@@ -112,6 +112,9 @@ bool is_low_res_and_specific_part(enum PartType type);
 void part_clamp_to_terminal_velocity(struct Part *part);
 void tmp_3a6c_update_vars(void);
 void initialize_llamas(void);
+int llama2_insert_by_force(struct Part *part_a, struct Part *part_b);
+void queue_dirty_rect(struct ShortVec *pos, struct ShortVec *size, u8 param3, u8 param4, s16 param5);
+void queue_rope_dirty_rects(struct Part *part, int _unused);
 void part_set_size(struct Part *part);
 s16 teeter_totter_helper_get_part_speed(struct Part *part);
 s16 distance_to_rope_link(struct RopeData *rope, struct Part *part, s16 *out_x, s16 *out_y);
@@ -199,6 +202,9 @@ struct Llama {
 struct Line {
     struct ShortVec p0, p1;
 };
+
+// Defined in Rust (src/tim_c.rs).
+void set_bounce_side_flags(struct Line *line, s16 x, byte *bounce_field_0x86);
 
 void play_sound(int id);
 

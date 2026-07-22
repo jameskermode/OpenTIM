@@ -9,7 +9,6 @@ void stub_10a8_280a(struct Part *part, int c);
 void stub_10a8_2b6d(struct Part *part, int c);
 void stub_10a8_21cb(struct Part *part, u8 c);
 int stub_1050_02db(struct Part *part);
-int stub_10a8_4509(struct Part *part_a, struct Part *part_b);
 bool calculate_line_intersection(const struct Line *a, const struct Line *b, struct ShortVec *out);
 struct Part* part_new(enum PartType type);
 void insert_part_into_static_parts(struct Part *part);
@@ -231,7 +230,7 @@ int teeter_totter_bounce(struct Part *part) {
         return 1;
     }
 
-    if (stub_10a8_4509(part, part->bounce_part) == 0) {
+    if (llama2_insert_by_force(part, part->bounce_part) == 0) {
         return 1;
     }
 

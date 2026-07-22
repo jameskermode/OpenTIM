@@ -295,6 +295,29 @@ Nth segment lands on (trivial to read off the memory map). This is not a blockin
 later work identifying `stub_XXXX_XXXX` functions from their TIMWIN address comments can
 proceed by typing the address directly into Ghidra's "Go To" address bar.
 
+## Task 7: identifying the last 4 leaf stubs
+
+Ghidra decompilation of all four addresses below was run against the same validated
+`OpenTIM` project (`pyghidra_dump_task7.py`, throwaway, not committed). All four disassemblies
+matched the existing C 1:1 where the C already had real logic, and revealed real (non-stub)
+logic at the two addresses whose C bodies had been reduced to deliberate no-ops.
+
+| stub | renamed to | confidence | what was established | what remains unknown |
+|---|---|---|---|---|
+| `stub_1050_025e` | `set_bounce_side_flags` | High (mechanics); medium (deeper meaning) | Ghidra decompile at `1050:025e` matches the existing "Accurate" C exactly, instruction for instruction. Classifies which side of a `Line`'s x-range a query point falls on, setting one or both of a 2-byte output (`bounce_field_0x86`) accordingly. Only caller is `stub_1050_0550` (still unrenamed), part of the general border-bounce collision path used by any two colliding bordered parts. | Why the destination is specifically called `bounce_field_0x86`, i.e. what a "side" flag concretely controls later in bounce resolution, is still not established — the field itself was left unrenamed. |
+| `stub_10a8_4509` | `llama2_insert_by_force` | High (mechanics, confirmed byte-for-byte against Ghidra); medium (why) | Maintains `LLAMA_2` as a list of parts to be (re-)simulated this frame, sorted descending by `force`, drawing free nodes from the `LLAMA_1` pool (`initialize_llamas`). Refuses to insert if `part_b` is already queued with an equal-or-higher force. Called from `teeter_totter_bounce` and the rope-to-teeter-totter force-propagation code — both "hand off my force to a connected part so it reacts next" scenarios. | The `Llama` naming itself remains a codename (pre-existing, not resolved by this task) — no evidence surfaced for what the original function/struct was actually called. |
+| `stub_10a8_2bea` | `queue_dirty_rect` | High (mechanics, from Ghidra decompile) | NOT a no-op in the original binary (469 bytes of real logic): converts world-space `pos`/`size` (or two corner points) to screen space via global scroll offsets and inserts/dedupes the resulting rectangle into a global pending-redraw list. Never touches `Part`/simulation state — confirms the prior port's guess ("might be related to drawing") was correct. Left as the no-op the C body already was, since this project's renderer repaints every frame rather than tracking dirty rectangles. | The exact original name/purpose within the legacy GDI blitter (e.g. whether it fed a real `InvalidateRect`-style call) was not traced further, since it has no bearing on simulation correctness. |
+| `stub_10a8_28f6` | `queue_rope_dirty_rects` | High (mechanics, from Ghidra decompile) | NOT a no-op in the original binary (631 bytes): walks a rope/pulley chain from `part->rope_data[0]`, using the same `links_to[rope_slot]` traversal as `calculate_rope_sag`, and calls `queue_dirty_rect` to cover each segment's previous-frame extent (endpoints from `RopeData::ends_pos_prev1`, expanded by sag) plus a 16x16 rect at each endpoint (anchor/pin sprite). Simulation-mode covers only the immediate neighbour(s); design-mode walks the whole chain. Confirms the prior port's guess ("Called when ropes are used... related to drawing") was correct. Left as the pre-existing no-op. | Same caveat as `queue_dirty_rect` — legacy rendering detail, not simulation-relevant. |
+
+All four are exercised by the test gate's own 7 levels, not merely read about: `L20.LEV` and
+`L24.LEV` both contain `Rope`/`Pulley` parts (`L20` also has 2 `TeeterTotter`s), so
+`llama2_insert_by_force`, `queue_dirty_rect` and `queue_rope_dirty_rects` all run during
+`./scripts/verify.sh`. `set_bounce_side_flags` sits on the general border-bounce collision
+path and is exercised whenever any two bordered parts collide (e.g. the basketballs/inclines
+in `L6.LEV`/`L31.LEV`/`L79.LEV`). Confirmed by temporarily adding a scratch example
+(`examples/scratch_partcount.rs`, not committed) that iterates each level's loaded parts and
+prints a `PartType` histogram.
+
 ## Procedure summary (for future identification work)
 
 1. `brew install ghidra` (formula; provides `openjdk@21` too).

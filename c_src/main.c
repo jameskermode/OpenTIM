@@ -480,29 +480,7 @@ int stub_1050_00f0(u16 angle) {
     return 0;
 }
 
-/* TIMWIN: 1050:025e
-   Note: We changed the signature slightly, to pass bounce_field_0x86 directly.
-   Accurate
-*/
-void stub_1050_025e(struct Line *line, s16 x, byte *bounce_field_0x86) {
-    if (calculate_line_intersection_helper(x, line->p0.x, line->p1.x) != 0) {
-        bounce_field_0x86[0] = 1;
-        bounce_field_0x86[1] = 1;
-    }
-    if (line->p0.x < line->p1.x) {
-        if (x >= line->p0.x) {
-            bounce_field_0x86[0] = 1;
-        } else {
-            bounce_field_0x86[1] = 1;
-        }
-    } else {
-        if (x < line->p1.x) {
-            bounce_field_0x86[0] = 1;
-        } else {
-            bounce_field_0x86[1] = 1;
-        }
-    }
-}
+// set_bounce_side_flags (formerly stub_1050_025e): moved to Rust (src/tim_c.rs).
 
 /* TIMWIN: 1050:0550
    Very similar to stub_1050_08fe
@@ -616,7 +594,7 @@ int stub_1050_0550(bool some_bool) {
                                 PART_3a6c->bounce_angle = b0angle;
                                 PART_3a6c->bounce_border_index = border_idx - 1;
 
-                                stub_1050_025e(&line2, TMP_X_CENTER_3a6c - somex, PART_3a6c->bounce_field_0x86);
+                                set_bounce_side_flags(&line2, TMP_X_CENTER_3a6c - somex, PART_3a6c->bounce_field_0x86);
                                 found = 1;
                             }
                         }
@@ -1034,68 +1012,11 @@ int stub_1050_02db(struct Part *part) {
     return has_found_angle;
 }
 
-/* TIMWIN: 10a8:4509
-   Accurate */
-int stub_10a8_4509(struct Part *part_a, struct Part *part_b) {
-    s32 force = part_a->force;
+// llama2_insert_by_force (formerly stub_10a8_4509): moved to Rust (src/tim_c.rs).
 
-    for (struct Llama *llama2 = LLAMA_2; llama2 != 0; llama2 = llama2->next) {
-        if (llama2->part == part_b && llama2->force >= force) {
-            return 0;
-        }
-    }
+// queue_dirty_rect (formerly stub_10a8_2bea): moved to Rust (src/tim_c.rs).
 
-    struct Llama *llama1_head = LLAMA_1;
-
-    if (LLAMA_2 && LLAMA_2->force >= force) {
-        struct Llama *llama2_insert_point = LLAMA_2;
-        
-        struct Llama *cur = LLAMA_2->next;
-        while (cur) {
-            if (cur->force <= force) break;
-            llama2_insert_point = cur;
-            cur = cur->next;
-        }
-
-        // Pop head of LLAMA_1, insert it AFTER llama2_insert_point.
-
-        struct Llama *tmp = LLAMA_1;
-        LLAMA_1 = LLAMA_1->next;
-        tmp->next = llama2_insert_point->next;
-        llama2_insert_point->next = tmp;
-    } else {
-        // Pop head of LLAMA_1, prepend to LLAMA_2
-
-        struct Llama *tmp = LLAMA_1;
-        LLAMA_1 = LLAMA_1->next;
-        tmp->next = LLAMA_2;
-        LLAMA_2 = tmp;
-    }
-
-    llama1_head->part = part_b;
-    llama1_head->force = force;
-    return 1;
-}
-
-/* TIMWIN: 10a8:2bea */
-void stub_10a8_2bea(struct ShortVec *pos, struct ShortVec *size, u8 param3, u8 param4, s16 param5) {
-    // doesn't update parts or datas. might be related to drawing. could maybe omit in the port?
-    // do nothing, and let's see how that works out.
-    (void)(pos);
-    (void)(size);
-    (void)(param3);
-    (void)(param4);
-    (void)(param5);
-}
-
-/* TIMWIN: 10a8:28f6 */
-void stub_10a8_28f6(struct Part *part, int _unused) {
-    // Called when ropes are used.
-    // I think it's related to drawing. Could maybe omit in the port?
-    // do nothing, and let's see how that works out.
-    (void)(part);
-    (void)(_unused);
-}
+// queue_rope_dirty_rects (formerly stub_10a8_28f6): moved to Rust (src/tim_c.rs).
 
 /* TIMWIN: 10a8:3c6d */
 // static inline void stub_10a8_3c6d(struct Part *part, byte param2, byte param3, u16 param4) {
@@ -1243,7 +1164,7 @@ int stub_10a8_3cc1(struct Part *part) {
 
                         enum LevelState prev_level_state = LEVEL_STATE;
                         LEVEL_STATE = DESIGN_MODE;
-                        stub_10a8_28f6(rope_or_pulley_part, 3);
+                        queue_rope_dirty_rects(rope_or_pulley_part, 3);
                         LEVEL_STATE = prev_level_state;
 
                         struct Part *a_part = other_part->links_to[rope->part1_rope_slot];
@@ -1264,7 +1185,7 @@ int stub_10a8_3cc1(struct Part *part) {
 
                         enum LevelState prev_level_state = LEVEL_STATE;
                         LEVEL_STATE = DESIGN_MODE;
-                        stub_10a8_28f6(rope_or_pulley_part, 3);
+                        queue_rope_dirty_rects(rope_or_pulley_part, 3);
                         LEVEL_STATE = prev_level_state;
 
                         struct Part *a_part = other_part->links_to[rope->part2_rope_slot];
@@ -1327,7 +1248,7 @@ int stub_10a8_3cc1(struct Part *part) {
                         }
                     }
 
-                    int res = stub_10a8_4509(part, other_part);
+                    int res = llama2_insert_by_force(part, other_part);
 
                     if (res != 0) {
                         other_part->state2 = state2;
@@ -1725,7 +1646,7 @@ void stub_10a8_21cb(struct Part *part, u8 c) {
 void stub_10a8_280a(struct Part *part, int c) {
     if (part->type == P_PULLEY) {
         if (part->rope_data[1]) {
-            stub_10a8_28f6(part->rope_data[1]->rope_or_pulley_part, c);
+            queue_rope_dirty_rects(part->rope_data[1]->rope_or_pulley_part, c);
         }
     } else {
         if (part->type != P_BELT && part->type != P_ROPE) {
@@ -1733,10 +1654,10 @@ void stub_10a8_280a(struct Part *part, int c) {
                 stub_10a8_28a5(part->belt_data->belt_part, c);
             }
             if (part->rope_data[0]) {
-                stub_10a8_28f6(part->rope_data[0]->rope_or_pulley_part, c);
+                queue_rope_dirty_rects(part->rope_data[0]->rope_or_pulley_part, c);
             }
             if (part->rope_data[1]) {
-                stub_10a8_28f6(part->rope_data[1]->rope_or_pulley_part, c);
+                queue_rope_dirty_rects(part->rope_data[1]->rope_or_pulley_part, c);
             }
         }
     }
@@ -1749,10 +1670,10 @@ void stub_10a8_2b6d(struct Part *part, int c) {
     if (part->type == P_BELT) {
         stub_10a8_28a5(part, c);
     } else if (part->type == P_ROPE) {
-        stub_10a8_28f6(part, c);
+        queue_rope_dirty_rects(part, c);
     } else {
         if (!(is_low_res_and_specific_part(part->type) && LEVEL_STATE == SIMULATION_MODE)) {
-            stub_10a8_2bea(&part->pos_render_prev1, &part->size_prev1, 1, 1, 0);
+            queue_dirty_rect(&part->pos_render_prev1, &part->size_prev1, 1, 1, 0);
         }
     }
 }
