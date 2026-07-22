@@ -26,6 +26,12 @@ LEVELS="L6 L20 L21 L24 L25 L31 L79"
 TICKS="0 30 120 300"
 FAIL=0
 
+# All scratch files for this run live under one per-invocation directory so two
+# concurrent runs of this script cannot clobber each other's temp files.
+VERIFY_TMP="$(mktemp -d "${TMPDIR:-/tmp}/opentim-verify.XXXXXX")"
+cleanup() { rm -rf "$VERIFY_TMP"; }
+trap cleanup EXIT INT TERM
+
 if [ "$BLESS" = "1" ]; then
     echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
     echo "!! --bless: rewriting tests/baselines/ from the CURRENT build."
@@ -44,7 +50,19 @@ cargo build --quiet
 cargo build --quiet --release
 
 echo "== unit tests =="
-cargo test --quiet 2>&1 | grep -E "test result" | head -1
+# Capture output and exit status separately from any filtering: piping straight into
+# `grep | head` would make the pipeline's exit status head's (always 0), so a failing
+# test run would never fail the gate. Instead run cargo test as the `if` condition
+# (exempt from `set -e`), and only inspect the exit code to decide pass/fail.
+if cargo test --quiet > "$VERIFY_TMP/v_test.txt" 2>&1; then
+    grep -E "test result" "$VERIFY_TMP/v_test.txt" | head -1
+else
+    echo "  FAIL unit tests failed"
+    grep -E "test result" "$VERIFY_TMP/v_test.txt" | head -5
+    echo "  -- last 40 lines of cargo test output --"
+    tail -n 40 "$VERIFY_TMP/v_test.txt"
+    FAIL=1
+fi
 
 if [ ! -f game-data/tim1/RESOURCE.MAP ]; then
     if [ "$BLESS" = "1" ]; then
@@ -52,24 +70,29 @@ if [ ! -f game-data/tim1/RESOURCE.MAP ]; then
         exit 1
     fi
     echo "!! game-data/tim1 missing - skipping simulation checks"
-    echo "ALL CHECKS PASSED (build and unit tests only)"
-    exit 0
+    if [ "$FAIL" = "0" ]; then
+        echo "ALL CHECKS PASSED (build and unit tests only)"
+        exit 0
+    else
+        echo "CHECKS FAILED (unit tests failed; build and unit tests only)"
+        exit 1
+    fi
 fi
 
 echo "== wasm build =="
 if command -v wasm-bindgen >/dev/null 2>&1 && command -v zig >/dev/null 2>&1; then
     cargo build --quiet --lib --release --target wasm32-unknown-unknown
     wasm-bindgen target/wasm32-unknown-unknown/release/opentim.wasm \
-        --out-dir /tmp/opentim-verify --target nodejs >/dev/null
+        --out-dir "$VERIFY_TMP/wasm-out" --target nodejs >/dev/null
     WASM=1
 else
     echo "   (zig or wasm-bindgen missing - skipping wasm comparison)"
     WASM=0
 fi
 
-cat > /tmp/opentim-verify-compare.js <<'EOF'
+cat > "$VERIFY_TMP/compare.js" <<EOF
 const fs = require('fs'), path = require('path');
-const { Game } = require('/tmp/opentim-verify/opentim.js');
+const { Game } = require('$VERIFY_TMP/wasm-out/opentim.js');
 const dir = process.argv[2], files = {};
 for (const n of fs.readdirSync(dir)) {
   const p = path.join(dir, n);
@@ -99,22 +122,23 @@ echo "== simulation: baseline == debug == release == wasm =="
 for lev in $LEVELS; do
   for t in $TICKS; do
     base="tests/baselines/$lev.LEV.$t.txt"
-    ./target/debug/opentim   game-data/tim1 "$lev.LEV" "$t" 2>/dev/null | sed -n '/after/,$p' | tail -n +2 > /tmp/v_dbg.txt
-    ./target/release/opentim game-data/tim1 "$lev.LEV" "$t" 2>/dev/null | sed -n '/after/,$p' | tail -n +2 > /tmp/v_rel.txt
-    if [ ! -s /tmp/v_dbg.txt ]; then echo "  FAIL $lev@$t produced no output"; FAIL=1; continue; fi
+    ./target/debug/opentim   game-data/tim1 "$lev.LEV" "$t" 2>/dev/null | sed -n '/after/,$p' | tail -n +2 > "$VERIFY_TMP/v_dbg.txt"
+    ./target/release/opentim game-data/tim1 "$lev.LEV" "$t" 2>/dev/null | sed -n '/after/,$p' | tail -n +2 > "$VERIFY_TMP/v_rel.txt"
+    if [ ! -s "$VERIFY_TMP/v_dbg.txt" ]; then echo "  FAIL $lev@$t produced no output"; FAIL=1; continue; fi
     if [ ! -f "$base" ]; then
       echo "  FAIL $lev@$t no baseline at $base (run ./scripts/verify.sh --bless to create it deliberately)"
       FAIL=1
-    elif ! diff -q "$base" /tmp/v_rel.txt >/dev/null; then
-      echo "  FAIL $lev@$t release != baseline $base"; diff "$base" /tmp/v_rel.txt | head -4; FAIL=1
+    elif ! diff -q "$base" "$VERIFY_TMP/v_rel.txt" >/dev/null; then
+      echo "  FAIL $lev@$t release != baseline $base"; diff "$base" "$VERIFY_TMP/v_rel.txt" | head -4; FAIL=1
     fi
-    if ! diff -q /tmp/v_dbg.txt /tmp/v_rel.txt >/dev/null; then
-      echo "  FAIL $lev@$t debug != release"; diff /tmp/v_dbg.txt /tmp/v_rel.txt | head -4; FAIL=1
+    if ! diff -q "$VERIFY_TMP/v_dbg.txt" "$VERIFY_TMP/v_rel.txt" >/dev/null; then
+      echo "  FAIL $lev@$t debug != release"; diff "$VERIFY_TMP/v_dbg.txt" "$VERIFY_TMP/v_rel.txt" | head -4; FAIL=1
     fi
     if [ "$WASM" = "1" ]; then
-      node /tmp/opentim-verify-compare.js "$PWD/game-data/tim1" "$lev.LEV" "$t" > /tmp/v_wsm.txt 2>/dev/null
-      if ! diff -q /tmp/v_rel.txt /tmp/v_wsm.txt >/dev/null; then
-        echo "  FAIL $lev@$t release != wasm"; diff /tmp/v_rel.txt /tmp/v_wsm.txt | head -4; FAIL=1
+      if ! node "$VERIFY_TMP/compare.js" "$PWD/game-data/tim1" "$lev.LEV" "$t" > "$VERIFY_TMP/v_wsm.txt" 2> "$VERIFY_TMP/v_wsm_err.txt"; then
+        echo "  FAIL $lev@$t wasm crashed"; tail -n 20 "$VERIFY_TMP/v_wsm_err.txt"; FAIL=1
+      elif ! diff -q "$VERIFY_TMP/v_rel.txt" "$VERIFY_TMP/v_wsm.txt" >/dev/null; then
+        echo "  FAIL $lev@$t release != wasm"; diff "$VERIFY_TMP/v_rel.txt" "$VERIFY_TMP/v_wsm.txt" | head -4; FAIL=1
       fi
     fi
   done
@@ -122,10 +146,19 @@ done
 
 echo "== reload: loading a level replaces the previous world =="
 cargo build --quiet --example reload
-RELOAD_TICKS=120 ./target/debug/examples/reload game-data/tim1 L31.LEV 2>/dev/null | grep "^  " > /tmp/v_fresh.txt
-RELOAD_TICKS=120 ./target/debug/examples/reload game-data/tim1 L6.LEV L21.LEV L31.LEV 2>/dev/null | grep "^  " > /tmp/v_reload.txt
-if ! diff -q /tmp/v_fresh.txt /tmp/v_reload.txt >/dev/null; then
-  echo "  FAIL reloaded world differs from fresh"; FAIL=1
+RELOAD_OK=1
+if ! RELOAD_TICKS=120 ./target/debug/examples/reload game-data/tim1 L31.LEV > "$VERIFY_TMP/v_fresh_raw.txt" 2>&1; then
+  echo "  FAIL reload (fresh L31) crashed"; tail -n 20 "$VERIFY_TMP/v_fresh_raw.txt"; FAIL=1; RELOAD_OK=0
+fi
+if ! RELOAD_TICKS=120 ./target/debug/examples/reload game-data/tim1 L6.LEV L21.LEV L31.LEV > "$VERIFY_TMP/v_reload_raw.txt" 2>&1; then
+  echo "  FAIL reload (L6,L21,L31) crashed"; tail -n 20 "$VERIFY_TMP/v_reload_raw.txt"; FAIL=1; RELOAD_OK=0
+fi
+if [ "$RELOAD_OK" = "1" ]; then
+  grep "^  " "$VERIFY_TMP/v_fresh_raw.txt" > "$VERIFY_TMP/v_fresh.txt" || true
+  grep "^  " "$VERIFY_TMP/v_reload_raw.txt" > "$VERIFY_TMP/v_reload.txt" || true
+  if ! diff -q "$VERIFY_TMP/v_fresh.txt" "$VERIFY_TMP/v_reload.txt" >/dev/null; then
+    echo "  FAIL reloaded world differs from fresh"; diff "$VERIFY_TMP/v_fresh.txt" "$VERIFY_TMP/v_reload.txt" | head -4; FAIL=1
+  fi
 fi
 
 if [ "$FAIL" = "0" ]; then echo "ALL CHECKS PASSED"; else echo "CHECKS FAILED"; exit 1; fi
