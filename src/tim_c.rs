@@ -14,7 +14,6 @@ extern {
     pub fn part_alloc_borders(part: *mut Part, length: u16);
     pub fn part_calculate_border_normals(part: *mut Part);
     pub fn part_set_size_and_pos_render(part: *mut Part);
-    pub fn part_clamp_to_terminal_velocity(part: *mut Part);
     pub fn restore_parts_state_from_design();
     pub fn advance_parts();
     pub fn all_parts_set_prev_vars();
@@ -1007,6 +1006,39 @@ pub extern "C" fn part_terminal_velocity(part_type: c_int) -> i16 {
         PartType::GunBullet => 0x3000,
         PartType::CannonBall => 0x3000,
         _ => atmosphere::calculate_terminal_velocity(unsafe { AIR_PRESSURE })
+    }
+}
+
+/// TIMWIN: 1090:012d
+/// Accurate
+///
+/// Safety: `part` is dereferenced unconditionally, exactly matching the C (no null check
+/// there either); every caller passes a live, currently-simulated `Part`.
+///
+/// `tv` and the `vel_hi_precision` components are all `i16`, but every comparison and the
+/// negation `-tv` are done in `i32` here (mirroring C's promotion of `s16` operands to `int`
+/// for `<`/unary `-`), and every assignment back to a `vel_hi_precision` field truncates with
+/// `as i16`, matching C's implicit narrowing conversion back to the `s16` lvalue. This
+/// matters on the boundary case `tv == i16::MIN`: C's `-tv` promotes `tv` to `int` first, so
+/// `-tv` is `32768` (no overflow at `int` width), and assigning that back to an `s16` wraps
+/// to `i16::MIN` again — `(-tv) as i16` with `tv: i32` reproduces that same wraparound rather
+/// than panicking the way plain `i16` negation would in a debug build.
+#[no_mangle]
+pub extern "C" fn part_clamp_to_terminal_velocity(part: *mut Part) {
+    unsafe {
+        let tv = part_terminal_velocity((*part).part_type as c_int) as i32;
+
+        if tv < (*part).vel_hi_precision.x as i32 {
+            (*part).vel_hi_precision.x = tv as i16;
+        } else if ((*part).vel_hi_precision.x as i32) < -tv {
+            (*part).vel_hi_precision.x = (-tv) as i16;
+        }
+
+        if tv < (*part).vel_hi_precision.y as i32 {
+            (*part).vel_hi_precision.y = tv as i16;
+        } else if ((*part).vel_hi_precision.y as i32) < -tv {
+            (*part).vel_hi_precision.y = (-tv) as i16;
+        }
     }
 }
 

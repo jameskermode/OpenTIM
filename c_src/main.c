@@ -341,23 +341,7 @@ void adjust_part_position(struct Part *part) {
     part_set_size_and_pos_render(part);
 }
 
-/* TIMWIN: 1090:012d
-   Accurate */
-void part_clamp_to_terminal_velocity(struct Part *part) {
-    const s16 tv = part_terminal_velocity(part->type);
-
-    if (tv < part->vel_hi_precision.x) {
-        part->vel_hi_precision.x = tv;
-    } else if (part->vel_hi_precision.x < -tv) {
-        part->vel_hi_precision.x = -tv;
-    }
-
-    if (tv < part->vel_hi_precision.y) {
-        part->vel_hi_precision.y = tv;
-    } else if (part->vel_hi_precision.y < -tv) {
-        part->vel_hi_precision.y = -tv;
-    }
-}
+// part_clamp_to_terminal_velocity has moved to Rust (src/tim_c.rs).
 
 /* TIMWIN: 1090:01b0
    Accurate */
