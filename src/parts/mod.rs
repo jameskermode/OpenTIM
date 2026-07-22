@@ -426,6 +426,93 @@ mod teeter_totter {
         }
     }
 
+    /// TIMWIN: 10d0:07a1
+    ///
+    /// Safety: `part` is dereferenced unconditionally to read `pos.x` and to walk its
+    /// `interactions` list, exactly matching the C (`part->pos.x`, `EACH_INTERACION(part,
+    /// ...)`, no null check anywhere in the original). Every `curpart` yielded from that list
+    /// is likewise dereferenced unconditionally to read/write `pos.x`, `part_type`, `flags2`,
+    /// and `state2`, matching the C's unchecked `curpart->...` accesses. The list is walked
+    /// with `interactions_iter()`, which (like `PartsIteratorMut`) caches the next node before
+    /// this loop's body runs; that's safe here because nothing in the body reassigns a part's
+    /// own `interactions` pointer.
+    ///
+    /// `mort_the_mouse_cage_start` and `bob_the_fish_break_bowl` are Rust-implemented
+    /// (`mort_the_mouse_cage::make_it_go` / `bob_the_fish::break_bowl`), called here through
+    /// the same C-ABI declaration `part_defs.c` used to call them ("// From Rust"); this
+    /// function therefore still calls no C function, remaining a "leaf" relative to the
+    /// remaining C code.
+    ///
+    /// `ivar2` is computed in `i32` (mirroring C's promotion of the `s16` operands to `int`
+    /// for `+`/`-`) and then truncated back to `i16` on assignment, matching C's implicit
+    /// narrowing conversion to the declared `s16` local.
+    #[no_mangle]
+    pub extern "C" fn teeter_totter_helper_1(part: *mut Part, is_bottom: bool, offset_x: i16) {
+        extern "C" {
+            fn mort_the_mouse_cage_start(part: *mut Part);
+            fn bob_the_fish_break_bowl(part: *mut Part);
+        }
+
+        let x = unsafe { (*part).pos.x };
+
+        for curpart in unsafe { (*part).interactions_iter() } {
+            let ivar2 =
+                ((x as i32) + (offset_x as i32) - (unsafe { (*curpart).pos.x } as i32)) as i16;
+
+            let pt = unsafe { (*curpart).part_type };
+
+            if pt == PartType::DynamiteWithPlunger.to_u16() {
+                if is_bottom {
+                    if unsafe { (*curpart).flags2 } & F2_FLIP_HORZ == 0 {
+                        if ivar2 > 0x66 && ivar2 < 0x88 {
+                            unsafe { (*curpart).state2 = 1; }
+                        }
+                    } else {
+                        if ivar2 >= 0 && ivar2 < 0x20 {
+                            unsafe { (*curpart).state2 = 1; }
+                        }
+                    }
+                }
+            } else if pt == PartType::MortTheMouseCage.to_u16() {
+                unsafe { mort_the_mouse_cage_start(curpart); }
+            } else if pt == PartType::BobTheFish.to_u16() {
+                unsafe { bob_the_fish_break_bowl(curpart); }
+            } else if pt == PartType::Bellows.to_u16() {
+                if unsafe { (*curpart).flags2 } & F2_FLIP_HORZ == 0 {
+                    if ivar2 >= 0 && ivar2 < 9 {
+                        unsafe { (*curpart).state2 = 1; }
+                    }
+                } else {
+                    if ivar2 > 0x35 && ivar2 < 0x3d {
+                        unsafe { (*curpart).state2 = 1; }
+                    }
+                }
+            } else if pt == PartType::Flashlight.to_u16() {
+                if is_bottom {
+                    if unsafe { (*curpart).flags2 } & F2_FLIP_HORZ == 0 {
+                        if ivar2 > 4 && ivar2 < 0x11 {
+                            unsafe { (*curpart).state2 = 1; }
+                        }
+                    } else {
+                        if ivar2 > 0xc && ivar2 < 0x19 {
+                            unsafe { (*curpart).state2 = 1; }
+                        }
+                    }
+                }
+            } else if pt == PartType::Scissors.to_u16() {
+                if unsafe { (*curpart).flags2 } & F2_FLIP_HORZ == 0 {
+                    if ivar2 >= 0 && ivar2 < 0xd {
+                        unsafe { (*curpart).state2 = 1; }
+                    }
+                } else {
+                    if ivar2 > 0x18 && ivar2 < 0x26 {
+                        unsafe { (*curpart).state2 = 1; }
+                    }
+                }
+            }
+        }
+    }
+
     // TIMWIN: 10d0:0240
     fn run(part: &mut Part) {
         run_c!(teeter_totter_run, part);

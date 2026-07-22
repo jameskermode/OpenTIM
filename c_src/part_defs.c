@@ -16,10 +16,6 @@ void insert_part_into_static_parts(struct Part *part);
 void insert_part_into_moving_parts(struct Part *part);
 bool part_collides_with_playfield_part(struct Part *part);
 
-// From Rust
-void bob_the_fish_break_bowl(struct Part *part);
-void mort_the_mouse_cage_start(struct Part *part);
-
 /* TIMWIN: 1090:11dc */
 void part_find_interactions(struct Part *part, enum GetPartsFlags choice, s16 hitbox_left, s16 hitbox_right, s16 hitbox_top, s16 hitbox_bottom) {
     part->interactions = 0;
@@ -83,65 +79,8 @@ void detach_rope_from_part(struct Part *part) {
     }
 }
 
-/* TIMWIN: 10d0:07a1 */
-void teeter_totter_helper_1(struct Part *part, bool is_bottom, s16 offset_x) {
-    s16 x = part->pos.x;
-    EACH_INTERACION(part, curpart) {
-        s16 ivar2 = (x + offset_x) - curpart->pos.x;
-
-        enum PartType pt = curpart->type;
-
-        if (pt == P_DYNAMITE_WITH_PLUNGER) {
-            if (is_bottom) {
-                if (NO_FLAGS(curpart->flags2, F2_FLIP_HORZ)) {
-                    if (ivar2 > 0x66 && ivar2 < 0x88) {
-                        curpart->state2 = 1;
-                    }
-                } else {
-                    if (ivar2 >= 0 && ivar2 < 0x20) {
-                        curpart->state2 = 1;
-                    }
-                }
-            }
-        } else if (pt == P_MORT_THE_MOUSE_CAGE) {
-            mort_the_mouse_cage_start(curpart);
-        } else if (pt == P_BOB_THE_FISH) {
-            bob_the_fish_break_bowl(curpart);
-        } else if (pt == P_BELLOWS) {
-            if (NO_FLAGS(curpart->flags2, F2_FLIP_HORZ)) {
-                if (ivar2 >= 0 && ivar2 < 9) {
-                    curpart->state2 = 1;
-                }
-            } else {
-                if (ivar2 > 0x35 && ivar2 < 0x3d) {
-                    curpart->state2 = 1;
-                } 
-            }
-        } else if (pt == P_FLASHLIGHT) {
-            if (is_bottom) {
-                if (NO_FLAGS(curpart->flags2, F2_FLIP_HORZ)) {
-                    if (ivar2 > 4 && ivar2 < 0x11) {
-                        curpart->state2 = 1;
-                    }
-                } else {
-                    if (ivar2 > 0xc && ivar2 < 0x19) {
-                        curpart->state2 = 1;
-                    }
-                }
-            }
-        } else if (pt == P_SCISSORS) {
-            if (NO_FLAGS(curpart->flags2, F2_FLIP_HORZ)) {
-                if (ivar2 >= 0 && ivar2 < 0xd) {
-                    curpart->state2 = 1;
-                }
-            } else {
-                if (ivar2 > 0x18 && ivar2 < 0x26) {
-                    curpart->state2 = 1;
-                } 
-            }
-        }
-    }
-}
+// teeter_totter_helper_1: implemented in Rust (src/parts/mod.rs, mod teeter_totter);
+// prototyped in tim.h.
 
 /*
 enum RopeFlags {
