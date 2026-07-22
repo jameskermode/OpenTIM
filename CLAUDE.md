@@ -112,10 +112,21 @@ The level argument is either a path to a saved machine on disk (parsed as **free
 ### Verification gate
 
 `./scripts/verify.sh` is the gate for any change that must not alter simulation
-behaviour. It builds debug, release and wasm, runs the unit tests, asserts that all
-three configurations produce identical part state across 7 levels at 4 tick counts,
-and checks that loading a level replaces the previous world. Run it after every
-function ported from C.
+behaviour. It builds debug, release and wasm, runs the unit tests, then for 7 levels at
+4 tick counts each checks part state two independent ways: against committed golden
+baselines in `tests/baselines/` (catches a port that computes the wrong answer
+identically in every configuration) and across debug/release/wasm (catches
+platform-specific divergence, e.g. an ABI bug). It also checks that loading a level
+replaces the previous world. Run it after every function ported from C.
+
+A config-vs-config comparison alone cannot catch a bad port: all three configurations
+rebuild from the same (possibly wrong) source and stay mutually consistent. The baseline
+comparison is what closes that gap, so both checks stay in the gate.
+
+`./scripts/verify.sh --bless` rewrites `tests/baselines/` from the current build. Never
+run this to make a failing port task pass — a baseline needing to change during a port
+means the port changed behaviour, i.e. the port is wrong. Only bless a deliberate,
+justified behaviour change, and say so in the commit message.
 
 ## Architecture
 
