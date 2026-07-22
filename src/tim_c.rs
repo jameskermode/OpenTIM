@@ -1374,3 +1374,108 @@ pub extern "C" fn is_low_res_and_specific_part(part_type: c_int) -> bool {
         _ => false,
     }
 }
+
+/// Private port of the `static inline` helper `approx_hypot` in `c_src/tim.h`. The C copy is
+/// left in place because other, still-C translation units (`draw_rope.c`) keep calling it.
+///
+/// Safety: no pointers involved; `x` and `y` are compared and shifted as C promotes `s16` to
+/// `int` for `<` and `>>`, with the final result truncated back to `i16` on return exactly as
+/// C narrows an `int` return expression to the declared `s16` return type.
+fn approx_hypot(x: i16, y: i16) -> i16 {
+    if (x as i32) < (y as i32) {
+        (((x as i32) >> 2) + ((x as i32) >> 3) + (y as i32)) as i16
+    } else {
+        (((y as i32) >> 2) + ((y as i32) >> 3) + (x as i32)) as i16
+    }
+}
+
+/// Private port of the `static inline` helper `part_get_rope_link_index` in `c_src/tim.h`.
+/// The C copy is left in place because other, still-C translation units (`part_defs.c`) keep
+/// calling it.
+///
+/// Safety: `from` is dereferenced unconditionally to read `links_to`, exactly matching the C
+/// (`from->links_to[0]`, no null check). Every caller passes a live `Part`.
+unsafe fn part_get_rope_link_index(target: *mut Part, from: *mut Part) -> i32 {
+    if (*from).links_to[0] == target {
+        return 0;
+    }
+    if (*from).links_to[1] == target {
+        return 1;
+    }
+    -1
+}
+
+/// TIMWIN: 10a8:42e6
+/// Accurate
+/// Returns absolute length between the two rope points.
+/// out_x and out_y are the signed x/y deltas between the two rope points.
+///
+/// Safety: `rope` and `part` are dereferenced unconditionally, exactly matching the C (no null
+/// checks there either); every caller passes a live rope and one of its two live endpoint
+/// parts. `links_to` (read from `part`/`rope->part2`'s `links_to[rope_slot]`) is likewise
+/// dereferenced unconditionally, matching the C's unchecked `links_to->type` /
+/// `links_to->rope_data[0]->ends_pos[...]`; this relies on the invariant (unchanged from the
+/// C) that a part's `links_to` slot used by an active rope always points at a live part, and
+/// that when that part is a pulley its primary `rope_data[0]` is always populated. `out_x` and
+/// `out_y` are also written through unconditionally, matching the C's unchecked `*out_x = ...`.
+///
+/// Every intermediate `rope_x_*`/`rope_y_*` addition and subtraction is done in `i32` (mirroring
+/// C's promotion of the `s16`/`byte` operands to `int`) and then truncated back to `i16` on
+/// assignment, matching C's implicit narrowing conversion back to the `s16` lvalues/parameters
+/// -- including the final `abs(...)` results, which C implicitly truncates from `int` down to
+/// the `s16` parameters of `approx_hypot`.
+#[no_mangle]
+pub extern "C" fn distance_to_rope_link(
+    rope: *mut RopeData,
+    part: *mut Part,
+    out_x: *mut i16,
+    out_y: *mut i16,
+) -> i16 {
+    unsafe {
+        let rope_x_1: i16;
+        let rope_y_1: i16;
+        let rope_x_2: i16;
+        let rope_y_2: i16;
+
+        if (*rope).part1 == part {
+            let rope_slot = (*rope).part1_rope_slot as usize;
+            rope_x_1 = ((*part).pos_render.x as i32 + (*part).rope_loc[rope_slot].x as i32) as i16;
+            rope_y_1 = ((*part).pos_render.y as i32 + (*part).rope_loc[rope_slot].y as i32) as i16;
+
+            let links_to = (*part).links_to[rope_slot];
+            let index = part_get_rope_link_index(part, links_to);
+            if (*links_to).part_type == PartType::Pulley as u16 {
+                let end = (*(*links_to).rope_data[0]).ends_pos[(1 - index) as usize];
+                rope_x_2 = end.x;
+                rope_y_2 = end.y;
+            } else {
+                rope_x_2 = ((*links_to).pos_render.x as i32 + (*links_to).rope_loc[index as usize].x as i32) as i16;
+                rope_y_2 = ((*links_to).pos_render.y as i32 + (*links_to).rope_loc[index as usize].y as i32) as i16;
+            }
+        } else {
+            let rope_slot = (*rope).part2_rope_slot as usize;
+            let p2 = (*rope).part2;
+            rope_x_1 = ((*p2).pos_render.x as i32 + (*p2).rope_loc[rope_slot].x as i32) as i16;
+            rope_y_1 = ((*p2).pos_render.y as i32 + (*p2).rope_loc[rope_slot].y as i32) as i16;
+
+            let links_to = (*p2).links_to[rope_slot];
+            let index = part_get_rope_link_index(p2, links_to);
+            if (*links_to).part_type == PartType::Pulley as u16 {
+                let end = (*(*links_to).rope_data[0]).ends_pos[(1 - index) as usize];
+                rope_x_2 = end.x;
+                rope_y_2 = end.y;
+            } else {
+                rope_x_2 = ((*links_to).pos_render.x as i32 + (*links_to).rope_loc[index as usize].x as i32) as i16;
+                rope_y_2 = ((*links_to).pos_render.y as i32 + (*links_to).rope_loc[index as usize].y as i32) as i16;
+            }
+        }
+
+        *out_x = (rope_x_1 as i32 - rope_x_2 as i32) as i16;
+        *out_y = (rope_y_1 as i32 - rope_y_2 as i32) as i16;
+
+        approx_hypot(
+            (rope_x_1 as i32 - rope_x_2 as i32).abs() as i16,
+            (rope_y_1 as i32 - rope_y_2 as i32).abs() as i16,
+        )
+    }
+}

@@ -1084,50 +1084,6 @@ int stub_1050_02db(struct Part *part) {
     return has_found_angle;
 }
 
-/* TIMWIN: 10a8:42e6
-   Accurate
-   Returns absoulute length between the two rope points.
-   out_x and out_y are the signed x/y deltas between the two rope points.
-*/
-s16 distance_to_rope_link(struct RopeData *rope, struct Part *part, s16 *out_x, s16 *out_y) {
-    s16 rope_x_1, rope_y_1;
-    s16 rope_x_2, rope_y_2;
-    if (rope->part1 == part) {
-        int rope_slot = rope->part1_rope_slot;
-        rope_x_1 = part->pos_render.x + part->rope_loc[rope_slot].x;
-        rope_y_1 = part->pos_render.y + part->rope_loc[rope_slot].y;
-
-        struct Part *links_to = part->links_to[rope_slot];
-        int index = part_get_rope_link_index(part, links_to);
-        if (links_to->type == P_PULLEY) {
-            rope_x_2 = links_to->rope_data[0]->ends_pos[1 - index].x;
-            rope_y_2 = links_to->rope_data[0]->ends_pos[1 - index].y;
-        } else {
-            rope_x_2 = links_to->pos_render.x + links_to->rope_loc[index].x;
-            rope_y_2 = links_to->pos_render.y + links_to->rope_loc[index].y;
-        }
-    } else {
-        int rope_slot = rope->part2_rope_slot;
-        rope_x_1 = rope->part2->pos_render.x + rope->part2->rope_loc[rope_slot].x;
-        rope_y_1 = rope->part2->pos_render.y + rope->part2->rope_loc[rope_slot].y;
-
-        struct Part *links_to = rope->part2->links_to[rope_slot];
-        int index = part_get_rope_link_index(rope->part2, links_to);
-        if (links_to->type == P_PULLEY) {
-            rope_x_2 = links_to->rope_data[0]->ends_pos[1 - index].x;
-            rope_y_2 = links_to->rope_data[0]->ends_pos[1 - index].y;
-        } else {
-            rope_x_2 = links_to->pos_render.x + links_to->rope_loc[index].x;
-            rope_y_2 = links_to->pos_render.y + links_to->rope_loc[index].y;
-        }
-    }
-
-    *out_x = rope_x_1 - rope_x_2;
-    *out_y = rope_y_1 - rope_y_2;
-
-    return approx_hypot(abs(rope_x_1 - rope_x_2), abs(rope_y_1 - rope_y_2));
-}
-
 /* TIMWIN: 10a8:4509
    Accurate */
 int stub_10a8_4509(struct Part *part_a, struct Part *part_b) {
