@@ -103,13 +103,26 @@ already depends on byte truncation wrapping to 255.
 
 ## Verification
 
-Run after **every** function moves. All of it already exists; formalise as `scripts/verify.sh`.
+Run after **every** function moves. Formalise as `scripts/verify.sh`.
 
-1. Build native debug, native release, and wasm.
-2. `cargo test` — 40 tests.
-3. The 28-comparison harness: 7 loadable levels at 0, 30, 120 and 300 ticks, asserting
-   **debug == release == wasm**. Comparing across optimisation levels is what caught the
-   ABI bug, so it must stay in the gate.
+The gate needs **two independent comparisons**, because they catch different failures:
+
+1. **Against a committed golden baseline.** Part state for 7 levels at 0, 30, 120 and 300
+   ticks, captured from the pre-port code and committed as fixtures. This is what catches a
+   transliteration that got the arithmetic subtly wrong.
+2. **Across build configurations** — debug == release == wasm. This is what caught the ABI
+   bug, and catches platform-specific divergence the baseline cannot see.
+
+Configuration comparison alone is **not sufficient**, and assuming it was is a mistake this
+spec previously made. All three configurations are rebuilt from the same source, so a port
+that changes behaviour identically everywhere leaves them mutually consistent and passes.
+That is the single most likely way a bad port slips through, so the baseline is the more
+important of the two.
+
+The baseline fixtures must only ever change when a behaviour change is intended and
+justified in the commit message. A port task changing them means the port is wrong.
+
+3. `cargo test` — 40 tests.
 4. The reload harness: part counts after any load order match a fresh load.
 
 `cargo run --example trace -- <dir> <level> <ticks> <part-type>` dumps one part's internal

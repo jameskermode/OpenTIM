@@ -18,7 +18,8 @@ moves. Ports are ordered bottom-up by the call graph so the FFI surface only eve
 ## Global Constraints
 
 - **Behaviour must not change.** This is a transliteration. Every port is verified
-  bit-identical against the existing simulation; a divergence means the port is wrong.
+  bit-identical against committed golden baselines captured before the port began; a
+  divergence means the port is wrong. Never update a baseline to make the gate pass.
 - **Exported functions must be `pub extern "C" fn`,** never bare `pub fn`. The Rust ABI is
   unspecified and C calling a Rust-ABI function caused a real optimisation-level-dependent
   bug (see `28c6ba5`).

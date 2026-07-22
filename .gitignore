@@ -10,3 +10,6 @@ game-data/
 
 # wasm build output
 web/pkg/
+
+# subagent-driven-development scratch
+.superpowers/
