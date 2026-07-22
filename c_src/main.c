@@ -1954,22 +1954,7 @@ void stub_1090_033f(struct Part *part) {
     }
 }
 
-struct GDIRect {
-    s16 left;
-    s16 top;
-    s16 right;
-    s16 bottom;
-};
-
-/* TIMWIN: 1020:02ba */
-bool calculate_intersecting_rect(struct GDIRect *out, struct GDIRect *a, struct GDIRect *b) {
-    out->left   = MAX(a->left,   b->left);
-    out->right  = MIN(a->right,  b->right);
-    out->top    = MAX(a->top,    b->top);
-    out->bottom = MIN(a->bottom, b->bottom);
-
-    return (out->left < out->right) && (out->top < out->bottom);
-}
+// struct GDIRect and calculate_intersecting_rect have moved to Rust (src/tim.h / src/tim_c.rs).
 
 /* TIMWIN: 10a8:21cb
    Accurate */

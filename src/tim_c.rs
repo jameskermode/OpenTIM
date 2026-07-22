@@ -634,6 +634,38 @@ pub extern "C" fn bucket_add_mass(bucket: *mut Part, part: *mut Part) {
     }
 }
 
+/// TIMWIN: 1020:02ba
+#[repr(C)]
+pub struct GDIRect {
+    pub left: i16,
+    pub top: i16,
+    pub right: i16,
+    pub bottom: i16,
+}
+
+/// TIMWIN: 1020:02ba
+///
+/// Safety: `out`, `a` and `b` are all dereferenced unconditionally, exactly matching the C
+/// (no null checks there either). This function currently has no callers anywhere in the
+/// codebase (it was dead in the C too), so there is no concrete call site to point to, but
+/// the contract carried over verbatim from C is that all three point at live `GDIRect`s
+/// (typically caller-owned stack locals), never null.
+#[no_mangle]
+pub extern "C" fn calculate_intersecting_rect(
+    out: *mut GDIRect,
+    a: *const GDIRect,
+    b: *const GDIRect,
+) -> bool {
+    unsafe {
+        (*out).left = (*a).left.max((*b).left);
+        (*out).right = (*a).right.min((*b).right);
+        (*out).top = (*a).top.max((*b).top);
+        (*out).bottom = (*a).bottom.min((*b).bottom);
+
+        (*out).left < (*out).right && (*out).top < (*out).bottom
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn sine_c(angle: u16) -> i16 {
     math::sine(angle)

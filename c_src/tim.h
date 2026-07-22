@@ -32,6 +32,13 @@ struct BorderPoint {
     u16 normal_angle;
 };
 
+struct GDIRect {
+    s16 left;
+    s16 top;
+    s16 right;
+    s16 bottom;
+};
+
 enum Flags1_Flags {
     F1_0001 = 0x0001,
     F1_0002 = 0x0002,
@@ -90,6 +97,7 @@ size_t debug_part_size();
 void remove_part_from_linked_list(struct Part *part);
 u16 part_get_movement_delta_angle(struct Part *part);
 void bucket_add_mass(struct Part *bucket, struct Part *part);
+bool calculate_intersecting_rect(struct GDIRect *out, struct GDIRect *a, struct GDIRect *b);
 
 #define EACH_STATIC_PART(varname) for (struct Part *varname = STATIC_PARTS_ROOT.next; varname != 0; varname = varname->next)
 #define EACH_MOVING_PART(varname) for (struct Part *varname = MOVING_PARTS_ROOT.next; varname != 0; varname = varname->next)
