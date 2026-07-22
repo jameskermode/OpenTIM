@@ -523,6 +523,26 @@ pub extern "C" fn calculate_line_intersection_helper(a: i16, b: i16, c: i16) -> 
     if intersects { 1 } else { 0 }
 }
 
+/**** Ported UNIMPLEMENTED stubs (still unimplemented; ported to establish the pattern) ****/
+
+/* TIMWIN: 10a8:1329 */
+#[no_mangle]
+pub extern "C" fn stub_10a8_1329(_belt: *mut BeltData) -> c_int {
+    unimplemented!("stub_10a8_1329")
+}
+
+/* TIMWIN: 10a8:28a5 */
+#[no_mangle]
+pub extern "C" fn stub_10a8_28a5(_part: *mut Part, _unused: c_int) {
+    unimplemented!("stub_10a8_28a5")
+}
+
+/* TIMWIN: 10a8:0880 */
+#[no_mangle]
+pub extern "C" fn stub_10a8_0880(_a: *mut Part, _b: *mut Part) -> *mut Part {
+    unimplemented!("stub_10a8_0880")
+}
+
 static mut PART_IMAGE_SIZES: Vec<(i16, i16)> = vec![];
 
 // Returns true if a valid image size was found.

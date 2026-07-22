@@ -2031,12 +2031,6 @@ bool calculate_intersecting_rect(struct GDIRect *out, struct GDIRect *a, struct 
     return (out->left < out->right) && (out->top < out->bottom);
 }
 
-int stub_10a8_1329(struct BeltData *belt) {
-    UNIMPLEMENTED;
-    (void)(belt);
-    return 0;
-}
-
 /* TIMWIN: 10a8:21cb
    Accurate */
 void stub_10a8_21cb(struct Part *part, u8 c) {
@@ -2086,16 +2080,6 @@ void stub_10a8_21cb(struct Part *part, u8 c) {
             }
         }
     }
-}
-
-void stub_10a8_28a5(struct Part *part, int _unused) {
-    // doesn't do anything except call stub_10a8_2bea
-    // stub_10a8_2bea doesn't update parts or datas. might be related to drawing. could maybe omit in the port?
-    
-    UNIMPLEMENTED;
-    
-    (void)(part);
-    (void)(_unused);
 }
 
 /* TIMWIN: 10a8:280a */
@@ -2265,14 +2249,6 @@ void stub_10a8_078e(struct RopeData *rope) {
     rope->original_part2_rope_slot = rope->part2_rope_slot;
 
     stub_10a8_2b6d(rope->rope_or_pulley_part, 3);
-}
-
-/* TIMWIN: 10a8:0880 */
-struct Part* stub_10a8_0880(struct Part *a, struct Part *b) {
-    UNIMPLEMENTED;
-    (void)(a);
-    (void)(b);
-    return 0;
 }
 
 /* TIMWIN: 10a8:0ab8 */

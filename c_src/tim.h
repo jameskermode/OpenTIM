@@ -217,6 +217,12 @@ s16 cosine_c(u16 angle);
 void rotate_point_c(s16 *x, s16 *y, u16 angle);
 /* */
 
+/* main.rs: ported UNIMPLEMENTED stubs */
+int stub_10a8_1329(struct BeltData *belt);
+void stub_10a8_28a5(struct Part *part, int _unused);
+struct Part* stub_10a8_0880(struct Part *a, struct Part *b);
+/* */
+
 #define UNIMPLEMENTED output_c(__FUNCTION__); unimplemented();
 void unimplemented();
 void output_c(const char *);
