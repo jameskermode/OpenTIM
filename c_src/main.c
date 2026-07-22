@@ -334,55 +334,6 @@ void update_rope_pos(struct RopeData *rope) {
     }
 }
 
-/* TIMWIN: 10a8:166a */
-void belt_set_four_pos(struct BeltData *belt) {
-    struct Part *part1 = belt->part1;
-    struct Part *part2 = belt->part2;
-
-    belt->pos1.x = part1->pos_render.x + part1->belt_loc.x;
-    belt->pos1.y = part1->pos_render.y + part1->belt_loc.y;
-
-    belt->pos2.x = part2->pos_render.x + part2->belt_loc.x;
-    belt->pos2.y = part2->pos_render.y + part2->belt_loc.y;
-
-    s16 delta_x = abs(belt->pos1.x - belt->pos2.x);
-    s16 delta_y = abs(belt->pos1.y - belt->pos2.y);
-
-    s16 pos1_x_off, pos1_y_off;
-    s16 pos2_x_off, pos2_y_off;
-    s16 pos3_x_off, pos3_y_off;
-    s16 pos4_x_off, pos4_y_off;
-
-    if (delta_x < delta_y) {
-        pos2_x_off = 0;
-        pos1_x_off = 0;
-        pos3_x_off = part1->belt_width;
-        pos3_y_off = part1->belt_width / 2;
-        pos4_x_off = part2->belt_width;
-        pos4_y_off = part2->belt_width / 2;
-        pos2_y_off = part2->belt_width / 2;
-        pos1_y_off = part1->belt_width / 2;
-    } else {
-        pos2_y_off = 0;
-        pos1_y_off = 0;
-        pos3_y_off = part1->belt_width;
-        pos3_x_off = part1->belt_width / 2;
-        pos4_y_off = part2->belt_width;
-        pos4_x_off = part2->belt_width / 2;
-        pos2_x_off = part2->belt_width / 2;
-        pos1_x_off = part1->belt_width / 2;
-    }
-
-    belt->pos3.x = belt->pos1.x + pos3_x_off;
-    belt->pos3.y = belt->pos1.y + pos3_y_off;
-    belt->pos4.x = belt->pos2.x + pos4_x_off;
-    belt->pos4.y = belt->pos2.y + pos4_y_off;
-    belt->pos1.x += pos1_x_off;
-    belt->pos1.y += pos1_y_off;
-    belt->pos2.x += pos2_x_off;
-    belt->pos2.y += pos2_y_off;
-}
-
 /* TIMWIN: 10a8:4794 */
 void restore_parts_state_from_design() {
     // Not using EACH_STATIC_THEN_MOVING_PART macro, because I'm unsure of the side-effects of the loop body and next_part_or_fallback.

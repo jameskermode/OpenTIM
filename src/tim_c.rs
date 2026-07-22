@@ -1557,6 +1557,76 @@ pub extern "C" fn bucket_handle_contained_parts(bucket: *mut Part) {
     }
 }
 
+/// TIMWIN: 10a8:166a
+///
+/// Safety: `belt`, `belt->part1`, and `belt->part2` are all dereferenced unconditionally,
+/// exactly matching the C (`belt->part1`, `part1->pos_render`, etc., no null checks anywhere
+/// in the original). Every caller passes a live `BeltData` whose `part1`/`part2` are live
+/// parts.
+///
+/// Every intermediate `+`/`-`/`abs`/`/` is done in `i32` (mirroring C's promotion of the
+/// `s16`/`u16` operands to `int`) and then truncated back to `i16` on assignment, matching
+/// C's implicit narrowing conversion back to the `s16` fields/locals -- including
+/// `belt_width / 2`, where `belt_width` is `u16` but promotes to a (always non-negative)
+/// `int` before the division, same result as an ordinary unsigned halving.
+#[no_mangle]
+pub extern "C" fn belt_set_four_pos(belt: *mut BeltData) {
+    unsafe {
+        let part1 = (*belt).part1;
+        let part2 = (*belt).part2;
+
+        (*belt).pos1.x = ((*part1).pos_render.x as i32 + (*part1).belt_loc.x as i32) as i16;
+        (*belt).pos1.y = ((*part1).pos_render.y as i32 + (*part1).belt_loc.y as i32) as i16;
+
+        (*belt).pos2.x = ((*part2).pos_render.x as i32 + (*part2).belt_loc.x as i32) as i16;
+        (*belt).pos2.y = ((*part2).pos_render.y as i32 + (*part2).belt_loc.y as i32) as i16;
+
+        let delta_x = (((*belt).pos1.x as i32) - ((*belt).pos2.x as i32)).abs() as i16;
+        let delta_y = (((*belt).pos1.y as i32) - ((*belt).pos2.y as i32)).abs() as i16;
+
+        let belt_width1 = (*part1).belt_width as i32;
+        let belt_width2 = (*part2).belt_width as i32;
+
+        let pos1_x_off: i16;
+        let pos1_y_off: i16;
+        let pos2_x_off: i16;
+        let pos2_y_off: i16;
+        let pos3_x_off: i16;
+        let pos3_y_off: i16;
+        let pos4_x_off: i16;
+        let pos4_y_off: i16;
+
+        if delta_x < delta_y {
+            pos2_x_off = 0;
+            pos1_x_off = 0;
+            pos3_x_off = belt_width1 as i16;
+            pos3_y_off = (belt_width1 / 2) as i16;
+            pos4_x_off = belt_width2 as i16;
+            pos4_y_off = (belt_width2 / 2) as i16;
+            pos2_y_off = (belt_width2 / 2) as i16;
+            pos1_y_off = (belt_width1 / 2) as i16;
+        } else {
+            pos2_y_off = 0;
+            pos1_y_off = 0;
+            pos3_y_off = belt_width1 as i16;
+            pos3_x_off = (belt_width1 / 2) as i16;
+            pos4_y_off = belt_width2 as i16;
+            pos4_x_off = (belt_width2 / 2) as i16;
+            pos2_x_off = (belt_width2 / 2) as i16;
+            pos1_x_off = (belt_width1 / 2) as i16;
+        }
+
+        (*belt).pos3.x = ((*belt).pos1.x as i32 + pos3_x_off as i32) as i16;
+        (*belt).pos3.y = ((*belt).pos1.y as i32 + pos3_y_off as i32) as i16;
+        (*belt).pos4.x = ((*belt).pos2.x as i32 + pos4_x_off as i32) as i16;
+        (*belt).pos4.y = ((*belt).pos2.y as i32 + pos4_y_off as i32) as i16;
+        (*belt).pos1.x = ((*belt).pos1.x as i32 + pos1_x_off as i32) as i16;
+        (*belt).pos1.y = ((*belt).pos1.y as i32 + pos1_y_off as i32) as i16;
+        (*belt).pos2.x = ((*belt).pos2.x as i32 + pos2_x_off as i32) as i16;
+        (*belt).pos2.y = ((*belt).pos2.y as i32 + pos2_y_off as i32) as i16;
+    }
+}
+
 // `rand` is only needed by `generate_hypot_samples` below, which (like the C original) is dead
 // code never compiled into a shipped build. It is deliberately NOT declared for wasm32: the
 // wasm shim (`src/wasm_libc.rs`) never provided a `rand` either, for the same reason -- the C
