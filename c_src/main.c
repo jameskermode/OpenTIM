@@ -1668,15 +1668,7 @@ void bucket_handle_contained_parts(struct Part *bucket) {
     }
 }
 
-/* TIMWIN: 10a8:45f8
-   Accurate */
-void bucket_add_mass(struct Part *bucket, struct Part *part) {
-    s32 sum = (s32)bucket->mass + (s32)part->mass;
-    if (sum > 32000) {
-        sum = 32000;
-    }
-    bucket->mass = (s16)sum;
-}
+// bucket_add_mass has moved to Rust (src/tim_c.rs).
 
 /* TIMWIN: 10a8:45c6 */
 void bucket_add_mass_of_contained(struct Part *bucket) {

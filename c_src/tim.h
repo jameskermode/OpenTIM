@@ -89,6 +89,7 @@ struct RopeData* rope_data_alloc();
 size_t debug_part_size();
 void remove_part_from_linked_list(struct Part *part);
 u16 part_get_movement_delta_angle(struct Part *part);
+void bucket_add_mass(struct Part *bucket, struct Part *part);
 
 #define EACH_STATIC_PART(varname) for (struct Part *varname = STATIC_PARTS_ROOT.next; varname != 0; varname = varname->next)
 #define EACH_MOVING_PART(varname) for (struct Part *varname = MOVING_PARTS_ROOT.next; varname != 0; varname = varname->next)

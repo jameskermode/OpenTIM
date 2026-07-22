@@ -610,6 +610,30 @@ pub extern "C" fn part_get_movement_delta_angle(part: *mut Part) -> u16 {
     }
 }
 
+/// TIMWIN: 10a8:45f8
+///
+/// Safety: `bucket` and `part` are both dereferenced unconditionally, exactly matching the C
+/// (no null checks there either). The only caller, `bucket_add_mass_of_contained` (still C),
+/// invokes this once per node of `bucket->interactions` via `EACH_INTERACION`, which never
+/// yields a null node, and passes the same non-null `bucket` throughout, so both pointers are
+/// always valid live `Part`s.
+///
+/// The sum is computed in `i32` exactly like the C's `(s32)bucket->mass + (s32)part->mass`,
+/// so it cannot overflow (both `mass` fields are `i16`, the widest possible sum comfortably
+/// fits in 32 bits). The clamp to 32000 matches the C exactly. Note there is no lower-bound
+/// clamp: if both masses are negative the sum can go well below `i16::MIN`, and the final
+/// `sum as i16` truncates/wraps to 16 bits exactly as C's `(s16)sum` cast does.
+#[no_mangle]
+pub extern "C" fn bucket_add_mass(bucket: *mut Part, part: *mut Part) {
+    unsafe {
+        let mut sum: i32 = (*bucket).mass as i32 + (*part).mass as i32;
+        if sum > 32000 {
+            sum = 32000;
+        }
+        (*bucket).mass = sum as i16;
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn sine_c(angle: u16) -> i16 {
     math::sine(angle)
