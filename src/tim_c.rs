@@ -32,16 +32,14 @@ extern {
     pub fn stub_10a8_2b6d(part: *mut Part, c: c_int);
     pub fn stub_10a8_280a(part: *mut Part, c: c_int);
     pub fn search_for_interactions(part: *mut Part, choice: c_int, search_x_min: i16, search_x_max: i16, search_y_min: i16, search_y_max: i16);
-
-    pub static mut GRAVITY: u16;
-    pub static mut AIR_PRESSURE: u16;
-
-    pub static mut STATIC_PARTS_ROOT: Part;
-    pub static mut MOVING_PARTS_ROOT: Part;
-    pub static mut PARTS_BIN_ROOT: Part;
-
-    pub static mut RESIZE_GOPHER: u16;
 }
+
+// The globals below now live in src/globals.rs; re-export them so existing call sites
+// that refer to them as `tim_c::GRAVITY` etc. keep compiling.
+pub use crate::globals::{
+    AIR_PRESSURE, GRAVITY, MOVING_PARTS_ROOT, PARTS_BIN_ROOT, RESIZE_GOPHER,
+    STATIC_PARTS_ROOT,
+};
 
 #[derive(Clone)]
 pub struct PartsIterator<'a> {
@@ -239,6 +237,9 @@ impl<'a> DerefMut for BeltDataRefMut<'a> {
 }
 
 impl Part {
+    /// An all-zero Part, for the list-root globals which the C initialised with `{ 0 }`.
+    pub const ZERO: Part = unsafe { std::mem::zeroed() };
+
     pub fn new_zero() -> Self {
         unsafe { std::mem::zeroed() }
     }

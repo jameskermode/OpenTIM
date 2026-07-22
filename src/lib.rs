@@ -12,6 +12,7 @@ pub mod parts;
 pub mod math;
 pub mod render;
 pub mod tim_c;
+pub mod globals;
 pub mod level_file_format;
 pub mod level_load;
 

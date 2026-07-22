@@ -1,13 +1,11 @@
-// This file is both used to declare extern'd global variables, and to declare them in globals.c.
+// This file declares the simulation's global variables, which are now defined in Rust
+// (src/globals.rs) rather than in globals.c.
 
 // Technique for naming global variables:
 // * If we don't know what it does, give it a codename. It's easier to remember (and more fun) than a number.
 
-#ifdef TIM_GLOBALS_C
-#   define GLOBAL(declaration, init) declaration = init;
-#else
-#   define GLOBAL(declaration, init) extern declaration;
-#endif
+// Globals now live in Rust (src/globals.rs); this header only declares them.
+#define GLOBAL(declaration, init) extern declaration;
 
 // The original game has an abundance of short-lived, temporary global variables (only used across a few function calls).
 // Until we have a hollistic sense of how they're actually used, we have to recreate them.
