@@ -104,13 +104,18 @@ and the entire editing UI.
 | Asset pipeline (LZW/LZHUF, BMP/SCN, VGA palette) | Complete — all 484 TIM 1 sprites decode |
 | Level parsing | Works — titles, objectives, gravity, parts |
 | Simulation core | Works — gravity, collision, bounce |
-| Part behaviour | 29 of 67 parts implemented |
+| Part behaviour | 28 of 66 parts implemented |
 | Levels | 7 of the 87 shipped puzzles load and simulate |
+| Browser build | Works, bit-identical to native |
 | Editing / design mode | Not started — see `docs/specs/` |
 
 Levels that fail do so only because they contain parts that are still
 `unimplemented()`. Missing parts cluster by theme: everything electrical, all
-weapons and pyrotechnics, and most characters.
+weapons and pyrotechnics, and most characters. The playable seven are
+`L6`, `L20`, `L21`, `L24`, `L25`, `L31` and `L79`; the browser build offers only
+those, and `parts::is_implemented` is what decides. That list is checked against
+reality by a test which creates every part type under `catch_unwind`, so it cannot
+go stale as parts get ported.
 
 "The Incredible Machine 2" (`TIM2.EXE`, 1994) is **not** supported. Its levels
 use magic `0xACEF` against TIM 1's `0xACED` and carry extra fields.
