@@ -335,6 +335,12 @@ pub unsafe fn moving_parts_iter<'a>() -> PartsIterator<'a> {
 #[derive(Clone)]
 pub struct PartsIteratorMut<'a> {
     cur: *mut Part,
+    /// The node last handed out, and the `next` value cached from it at that moment.
+    /// Used in debug builds only, to detect the divergence described on `next()` below.
+    #[cfg(debug_assertions)]
+    last_yielded: *mut Part,
+    #[cfg(debug_assertions)]
+    cached_next: *mut Part,
     _phantom: std::marker::PhantomData<&'a mut Part>
 }
 impl<'a> PartsIteratorMut<'a> {
@@ -343,6 +349,10 @@ impl<'a> PartsIteratorMut<'a> {
     pub unsafe fn new(ptr: *mut Part) -> Self {
         PartsIteratorMut {
             cur: ptr,
+            #[cfg(debug_assertions)]
+            last_yielded: std::ptr::null_mut(),
+            #[cfg(debug_assertions)]
+            cached_next: std::ptr::null_mut(),
             _phantom: std::marker::PhantomData
         }
     }
@@ -350,10 +360,40 @@ impl<'a> PartsIteratorMut<'a> {
 impl<'a> Iterator for PartsIteratorMut<'a> {
     type Item = *mut Part;
 
+    /// NOTE, and it matters when porting C loops: this reads `next` from the current node
+    /// BEFORE the caller's loop body runs, whereas the C `for (p = ...; p; p = p->next)`
+    /// idiom re-reads `p->next` AFTER the body. The two differ whenever a body reassigns
+    /// the current node's own `next` -- which is exactly what the list-splicing functions
+    /// (`insert_part_into_*`, `remove_part_from_linked_list`) and the tick driver do.
+    ///
+    /// A ported function whose body can relink the node it is standing on must walk the
+    /// list by hand, re-reading `->next` after the body, rather than using this iterator.
+    ///
+    /// Debug builds detect the mistake rather than diverging silently: if the previously
+    /// yielded node's `next` no longer matches what was cached from it, we panic.
     fn next(&mut self) -> Option<*mut Part> {
+        #[cfg(debug_assertions)]
+        {
+            if let Some(prev) = unsafe { self.last_yielded.as_ref() } {
+                assert!(
+                    prev.next == self.cached_next,
+                    "PartsIteratorMut: the loop body relinked the node it was standing on \
+                     ({:p}); this iterator cached `next` before the body ran, so it would \
+                     now diverge from the C loop it replaces. Walk the list by hand, \
+                     re-reading `->next` after the body.",
+                    self.last_yielded
+                );
+            }
+        }
+
         let ptr = self.cur;
         if let Some(part) = unsafe { self.cur.as_ref() } {
             self.cur = part.next;
+            #[cfg(debug_assertions)]
+            {
+                self.last_yielded = ptr;
+                self.cached_next = part.next;
+            }
             Some(ptr)
         } else {
             None
