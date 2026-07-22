@@ -5,3 +5,5 @@ generated-structs.js
 
 # Original game assets. Never commit these - the user supplies their own copy.
 game-data/
+# macOS
+.DS_Store
