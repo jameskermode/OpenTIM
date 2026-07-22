@@ -659,6 +659,39 @@ pub extern "C" fn bucket_add_mass(bucket: *mut Part, part: *mut Part) {
     }
 }
 
+/// TIMWIN: 1050:00a8
+/// Accurate
+///
+/// Safety: `PART_3a6a` (a raw `*mut Part` global) is dereferenced unconditionally, exactly
+/// matching the C (no null check there either). Every call site invokes this only after
+/// `PART_3a6a` has just been assigned from `get_first_part(...)` or is otherwise known to be
+/// the live part currently under consideration by the bounce-resolution logic, so it is
+/// non-null and valid at every call site, the same contract the C relied on.
+///
+/// Each `TMP_*_3a6a` output is `i16`, and every right-hand side is computed in `i32` (mirroring
+/// C's integer promotion of the `i16` operands before the `+`/`>>`) and then cast down with
+/// `as i16`, which truncates to 16 bits and reinterprets two's complement exactly like the
+/// implicit narrowing C performs on assignment to an `s16` variable. The `>> 1` on
+/// `size_something2.{x,y}` (both `i16`, promoted to `i32`) is an arithmetic (sign-extending)
+/// shift in both languages, so it agrees for negative inputs too.
+#[no_mangle]
+pub extern "C" fn tmp_3a6a_update_vars() {
+    unsafe {
+        let part = crate::globals::PART_3a6a;
+        crate::globals::TMP_X_3a6a = (*part).pos.x;
+        crate::globals::TMP_Y_3a6a = (*part).pos.y;
+
+        crate::globals::TMP_X_CENTER_3a6a =
+            ((*part).pos.x as i32 + ((*part).size_something2.x as i32 >> 1)) as i16;
+        crate::globals::TMP_Y_CENTER_3a6a =
+            ((*part).pos.y as i32 + ((*part).size_something2.y as i32 >> 1)) as i16;
+
+        crate::globals::TMP_X_RIGHT_3a6a = ((*part).pos.x as i32 + (*part).size.x as i32) as i16;
+        crate::globals::TMP_Y_BOTTOM_3a6a =
+            ((*part).pos.y as i32 + (*part).size.y as i32) as i16;
+    }
+}
+
 /// TIMWIN: 1090:158b
 /// Accurate
 ///

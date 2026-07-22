@@ -100,6 +100,7 @@ void bucket_add_mass(struct Part *bucket, struct Part *part);
 bool calculate_intersecting_rect(struct GDIRect *out, struct GDIRect *a, struct GDIRect *b);
 u16 quadrant_from_angle(u16 angle);
 bool bucket_contains(struct Part *bucket, struct Part *contains);
+void tmp_3a6a_update_vars(void);
 
 #define EACH_STATIC_PART(varname) for (struct Part *varname = STATIC_PARTS_ROOT.next; varname != 0; varname = varname->next)
 #define EACH_MOVING_PART(varname) for (struct Part *varname = MOVING_PARTS_ROOT.next; varname != 0; varname = varname->next)

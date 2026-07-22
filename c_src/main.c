@@ -607,18 +607,7 @@ void tmp_3a6c_update_vars() {
     TMP_Y_BOTTOM_3a6c = PART_3a6c->pos.y + PART_3a6c->size.y + abs(TMP_Y_DELTA_3a6c);
 }
 
-/* TIMWIN: 1050:00a8
-   Accurate */
-void tmp_3a6a_update_vars() {
-    TMP_X_3a6a = PART_3a6a->pos.x;
-    TMP_Y_3a6a = PART_3a6a->pos.y;
-
-    TMP_X_CENTER_3a6a = PART_3a6a->pos.x + (PART_3a6a->size_something2.x>>1);
-    TMP_Y_CENTER_3a6a = PART_3a6a->pos.y + (PART_3a6a->size_something2.y>>1);
-
-    TMP_X_RIGHT_3a6a = PART_3a6a->pos.x + PART_3a6a->size.x;
-    TMP_Y_BOTTOM_3a6a = PART_3a6a->pos.y + PART_3a6a->size.y;
-}
+// tmp_3a6a_update_vars has moved to Rust (src/tim_c.rs).
 
 /* TIMWIN: 1050:00f0
    Accurate */
