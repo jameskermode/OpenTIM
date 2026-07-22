@@ -105,6 +105,25 @@ pub fn load_level(buf: &[u8], freeform: bool) -> Result<level_file_format::Level
     Ok(level)
 }
 
+/// Whether every part in a level is implemented, i.e. whether the level will load rather
+/// than panic. Parses the level but does not install it.
+pub fn level_is_supported(buf: &[u8]) -> bool {
+    let opts = level_file_format::GameOptions::Tim { freeform_mode: false };
+    let level = match level_file_format::read(buf, &opts) {
+        Ok(l) => l,
+        Err(_) => return false,
+    };
+
+    level
+        .static_parts
+        .iter()
+        .chain(level.moving_parts.iter())
+        .chain(level.bin_parts.iter().flatten())
+        .all(|p| {
+            part::PartType::try_from_u16(p.part_type).map_or(false, parts::is_implemented)
+        })
+}
+
 /// Advance the simulation by one tick.
 pub fn tick() {
     unsafe {

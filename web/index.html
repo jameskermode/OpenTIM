@@ -54,6 +54,7 @@
     <select id="levels"></select>
     <button id="toggle">Start</button>
     <button id="reset">Reset</button>
+    <span id="count" style="color:#9aa0a6"></span>
   </div>
   <div id="objective"></div>
   <div id="canvas-container"></div>
@@ -72,6 +73,7 @@ const drop = document.getElementById('drop');
 const picker = document.getElementById('picker');
 const stage = document.getElementById('stage');
 const levels = document.getElementById('levels');
+const count = document.getElementById('count');
 const toggle = document.getElementById('toggle');
 const resetBtn = document.getElementById('reset');
 const objective = document.getElementById('objective');
@@ -140,11 +142,14 @@ async function boot(fileList) {
 
   game = new Game(files);
 
-  const names = game.resource_names().filter((n) => n.endsWith('.LEV'));
-  names.sort((a, b) => {
-    const na = parseInt(a.replace(/\D/g, ''), 10), nb = parseInt(b.replace(/\D/g, ''), 10);
-    return (isNaN(na) || isNaN(nb)) ? a.localeCompare(b) : na - nb;
-  });
+  // Only the levels whose parts are all implemented; the rest would just fail to load.
+  const names = game.supported_levels();
+  const total = game.resource_names().filter((n) => n.endsWith('.LEV')).length;
+  if (!names.length) {
+    throw new Error('None of the levels in this archive are playable yet.');
+  }
+  count.textContent = `${names.length} of ${total} levels playable`;
+
   levels.innerHTML = '';
   for (const n of names) {
     const o = document.createElement('option');
@@ -172,7 +177,7 @@ function loadLevel(name) {
     setRunning(false);
   } catch (ex) {
     objective.textContent = '';
-    fail(new Error(`${name} did not load. Most levels need parts that are still unimplemented.\n${ex}`));
+    fail(new Error(`${name} did not load.\n${ex}`));
   }
 }
 

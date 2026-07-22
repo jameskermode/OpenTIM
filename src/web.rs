@@ -94,6 +94,31 @@ impl Game {
         names.into_iter().map(|s| JsValue::from_str(&s)).collect()
     }
 
+    /// The .LEV entries that will actually load, i.e. whose parts are all implemented.
+    ///
+    /// Most of the 87 shipped puzzles still contain unimplemented parts, so listing them
+    /// all would mostly offer levels that fail. Sorted by level number.
+    pub fn supported_levels(&mut self) -> Vec<JsValue> {
+        let mut names: Vec<String> = self
+            .resources
+            .iter_filenames()
+            .filter(|n| n.ends_with(".LEV"))
+            .map(|s| s.to_string())
+            .collect();
+
+        names.retain(|name| {
+            crate::read_level_bytes(&mut self.resources, name)
+                .map(|bytes| crate::level_is_supported(&bytes))
+                .unwrap_or(false)
+        });
+
+        names.sort_by_key(|n| {
+            n.chars().filter(|c| c.is_ascii_digit()).collect::<String>().parse::<u32>().unwrap_or(u32::MAX)
+        });
+
+        names.into_iter().map(|s| JsValue::from_str(&s)).collect()
+    }
+
     /// Load a level from the archive and install it into the simulation.
     /// Returns the puzzle objective, when the level has one.
     pub fn load_level(&mut self, name: &str) -> Result<Option<String>, JsValue> {

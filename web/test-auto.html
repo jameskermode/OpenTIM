@@ -34,7 +34,14 @@ try {
   log('fetched ' + Object.keys(files).length + ' files');
 
   const game = new Game(files);
-  log('archive entries: ' + game.resource_names().length);
+  const all = game.resource_names();
+  log('archive entries: ' + all.length);
+
+  const total = all.filter((n) => n.endsWith('.LEV')).length;
+  const playable = game.supported_levels();
+  log('total .LEV: ' + total + ', playable: ' + playable.length);
+  log('playable list: ' + playable.join(' '));
+  log('includes L31.LEV: ' + playable.includes('L31.LEV'));
 
   const objective = game.load_level('L6.LEV');
   log('objective: ' + objective);

@@ -4350,6 +4350,48 @@ pub fn parts_bin_order() -> &'static [PartType] {
     PARTS_BIN_ORDER
 }
 
+/// Whether a part's `create` and `reset` callbacks are implemented, i.e. whether it can be
+/// loaded or placed at all. Anything else panics inside `part_reset` during level load.
+///
+/// This has to be an explicit list: "does this function call unimplemented()" is not
+/// something the program can ask itself at runtime. The test
+/// `implemented_matches_reality` checks the list against what actually happens, so it
+/// cannot drift as parts get ported.
+pub fn is_implemented(part_type: PartType) -> bool {
+    use crate::part::PartType;
+    match part_type {
+        PartType::BowlingBall => true,
+        PartType::BrickWall => true,
+        PartType::Incline => true,
+        PartType::TeeterTotter => true,
+        PartType::Balloon => true,
+        PartType::Conveyor => true,
+        PartType::MortTheMouseCage => true,
+        PartType::Pulley => true,
+        PartType::Belt => true,
+        PartType::Basketball => true,
+        PartType::Rope => true,
+        PartType::Cage => true,
+        PartType::PokeyTheCat => true,
+        PartType::Gear => true,
+        PartType::BobTheFish => true,
+        PartType::Bucket => true,
+        PartType::EyeHook => true,
+        PartType::Baseball => true,
+        PartType::JackOLantern => true,
+        PartType::HeartBalloon => true,
+        PartType::ChristmasTree => true,
+        PartType::Trampoline => true,
+        PartType::TennisBall => true,
+        PartType::PipeStraight => true,
+        PartType::WoodWall => true,
+        PartType::RopeSeveredEnd => true,
+        PartType::Nail => true,
+        PartType::DirtWall => true,
+        _ => false,
+    }
+}
+
 pub fn get_def(part_type: PartType) -> &'static PartDef {
     use crate::part::PartType::*;
 
@@ -4420,5 +4462,44 @@ pub fn get_def(part_type: PartType) -> &'static PartDef {
         Eightball              => &eightball::DEF,
         PinballBumper          => &pinball_bumper::DEF,
         LuckyClover            => &lucky_clover::DEF,
+    }
+}
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod implemented_tests {
+    use super::*;
+    use crate::part::PartType;
+    use std::convert::TryFrom;
+
+    /// Create every part type and see which ones actually panic, then compare against
+    /// `is_implemented`. Keeps the hand-written list honest.
+    #[test]
+    fn implemented_matches_reality() {
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {})); // the stubs panic on purpose; stay quiet
+
+        let mut wrong = vec![];
+        for raw in 0u16..=65 {
+            let part_type = match PartType::try_from(raw) {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
+            // part_new runs the part's create and reset callbacks.
+            let actually_works = std::panic::catch_unwind(|| unsafe {
+                crate::tim_c::part_new(raw as std::os::raw::c_int)
+            })
+            .is_ok();
+
+            if actually_works != is_implemented(part_type) {
+                wrong.push(format!(
+                    "{:?}: is_implemented() says {}, but creating it {}",
+                    part_type,
+                    is_implemented(part_type),
+                    if actually_works { "worked" } else { "panicked" }
+                ));
+            }
+        }
+
+        std::panic::set_hook(previous);
+        assert!(wrong.is_empty(), "is_implemented() is out of date:\n{}", wrong.join("\n"));
     }
 }
