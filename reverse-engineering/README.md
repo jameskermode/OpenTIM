@@ -25,11 +25,21 @@ Due to the way that Windows 3.1 loads executables into memory, the selector of e
 
 ## Static analysis: Ghidra
 
-The scripts here are used with Ghidra (version 9.1.2).
+The scripts in `ghidra-scripts/` were originally written for Ghidra 9.1.2 with Jython 2.7.
 
 Ghidra supports 16-bit Windows executables (NE format) passibly well. Other tools like radare2 fail to patch relocation addresses (when I tried it).
 
-Ghidra still needs a lot of hand-holding to make static analysis of TEMIM.EXE workable. One issue is that Ghidra is unaware of imported function names from GDI, USER and KERNEL. It refers to them by ordinal numbers, e.g. Ordinal1, Ordinal 123, etc.
+Ghidra still needs a lot of hand-holding to make static analysis of TEMIM.EXE workable. One issue is that older Ghidra is unaware of imported function names from GDI, USER and KERNEL. It refers to them by ordinal numbers, e.g. Ordinal1, Ordinal 123, etc. — that's what `rename-win16-fns.py` and the `win16fns/` tables fix.
 
 I'm unable to publish the project files on GitHub, because it would include the entire disassembly, which is similar to sharing the proprietary executable. So instead, I'll publish my findings and relevant code addresses.
+
+**Current Ghidra (12.x) no longer ships a Jython runtime**, so `rename-win16-fns.py` cannot
+be run as-is via `analyzeHeadless -postScript` on a current install — `.py` scripts are now
+routed through the PyGhidra (CPython) script provider instead, which `analyzeHeadless` alone
+does not initialize. Handily, current Ghidra's NE loader already auto-applies its own bundled
+Win16 export-name tables at import time, so GDI/USER/KERNEL calls come out already named
+without running any script; only the parameter-typing/calling-convention half of what the
+script does still requires porting. See `docs/reverse-engineering-setup.md` for the full
+setup procedure, exactly how the script fails, how it was ported to run under `pyghidra`
+(pip package) for validation, and the confirmed `TIMWIN: SSSS:OOOO` → Ghidra address mapping.
 
