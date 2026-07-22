@@ -1633,18 +1633,7 @@ void stub_10a8_2b6d(struct Part *part, int c) {
     }
 }
 
-/* TIMWIN: 10a8:4645 */
-void all_parts_set_prev_vars() {
-    if (SELECTED_PART) {
-        part_set_prev_vars(SELECTED_PART);
-    }
-
-    EACH_STATIC_THEN_MOVING_PART(part) {
-        if (part != SELECTED_PART) {
-            part_set_prev_vars(part);
-        }
-    }
-}
+// all_parts_set_prev_vars has moved to Rust (src/tim_c.rs).
 
 /* TIMWIN: 10a8:36f0 */
 void stub_10a8_36f0(struct Part *part) {

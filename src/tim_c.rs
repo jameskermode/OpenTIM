@@ -12,7 +12,6 @@ extern {
     pub fn part_set_size_and_pos_render(part: *mut Part);
     pub fn restore_parts_state_from_design();
     pub fn advance_parts();
-    pub fn all_parts_set_prev_vars();
     pub fn insert_part_into_static_parts(part: *mut Part);
     pub fn insert_part_into_moving_parts(part: *mut Part);
     pub fn insert_part_into_parts_bin(part: *mut Part);
@@ -2057,6 +2056,47 @@ pub extern "C" fn part_set_prev_vars(part: *mut Part) {
 
         (*part).extra2_prev2 = (*part).extra2_prev1;
         (*part).extra2_prev1 = (*part).extra2;
+    }
+}
+
+/// TIMWIN: 10a8:4645
+///
+/// Safety: `SELECTED_PART` is only dereferenced (via `part_set_prev_vars`) after a
+/// non-null check, matching the C's `if (SELECTED_PART) { ... }`. The main walk visits
+/// every static part then every moving part by calling `get_first_part`/
+/// `next_part_or_fallback` directly rather than driving the walk with
+/// `PartsIteratorMut` (which caches `next` before the loop body runs): `part_set_prev_vars`
+/// never writes any part's `next`/`prev`/list-membership fields (it only copies
+/// position/size/state "current" fields into their "prev1"/"prev2" shadows -- see its own
+/// safety note above), so both orders would in fact produce the same walk here, but this
+/// mirrors the C's `for (...; next_part_or_fallback(part, CHOOSE_MOVING_PART))` structure
+/// exactly (computing `next` from `next_part_or_fallback` only after the body has run) so
+/// the equivalence doesn't have to be re-derived by a future reader. `next_part_or_fallback`
+/// itself dereferences `part` unconditionally, matching the C (every part it is called on
+/// here was just yielded live by a previous call to it or to `get_first_part`).
+///
+/// This is exercised by the gate only insofar as the golden-baseline simulation runs call
+/// it every tick (via `src/lib.rs`/`src/render.rs`/`src/nannou.rs`) with `SELECTED_PART`
+/// null in the batch harness the gate drives -- the `SELECTED_PART` branch itself is never
+/// hit by the gate and rests on reading the C.
+#[no_mangle]
+pub extern "C" fn all_parts_set_prev_vars() {
+    unsafe {
+        let selected = crate::globals::SELECTED_PART;
+        if !selected.is_null() {
+            part_set_prev_vars(selected);
+        }
+
+        const CHOOSE_STATIC_OR_ELSE_MOVING_PART: c_int = 0x3000;
+        const CHOOSE_MOVING_PART: c_int = 0x1000;
+
+        let mut part = get_first_part(CHOOSE_STATIC_OR_ELSE_MOVING_PART);
+        while !part.is_null() {
+            if part != selected {
+                part_set_prev_vars(part);
+            }
+            part = next_part_or_fallback(part, CHOOSE_MOVING_PART);
+        }
     }
 }
 
