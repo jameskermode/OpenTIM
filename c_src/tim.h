@@ -81,6 +81,14 @@ enum GetPartsFlags {
 struct Part* get_first_part(int choice);
 struct Part* next_part_or_fallback(struct Part *part, int choice);
 
+// Defined in Rust (src/tim_c.rs).
+struct Part* part_alloc();
+void part_free(struct Part *part);
+struct BeltData* belt_data_alloc();
+struct RopeData* rope_data_alloc();
+size_t debug_part_size();
+void remove_part_from_linked_list(struct Part *part);
+
 #define EACH_STATIC_PART(varname) for (struct Part *varname = STATIC_PARTS_ROOT.next; varname != 0; varname = varname->next)
 #define EACH_MOVING_PART(varname) for (struct Part *varname = MOVING_PARTS_ROOT.next; varname != 0; varname = varname->next)
 #define EACH_STATIC_THEN_MOVING_PART(varname) \

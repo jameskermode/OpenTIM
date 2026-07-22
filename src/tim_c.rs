@@ -7,13 +7,8 @@ use crate::parts;
 
 /**** Import C declarations to Rust ****/
 extern {
-    pub fn debug_part_size() -> usize;
     pub fn initialize_llamas();
     pub fn part_new(part_type: c_int) -> *mut Part;
-    pub fn part_alloc() -> *mut Part;
-    pub fn belt_data_alloc() -> *mut BeltData;
-    pub fn rope_data_alloc() -> *mut RopeData;
-    pub fn part_free(part: *mut Part);
     pub fn part_init_rope_data_primary(part: *mut Part);
     pub fn part_init_belt_data(part: *mut Part);
     pub fn part_alloc_borders(part: *mut Part, length: u16);
@@ -32,6 +27,126 @@ extern {
     pub fn stub_10a8_2b6d(part: *mut Part, c: c_int);
     pub fn stub_10a8_280a(part: *mut Part, c: c_int);
     pub fn search_for_interactions(part: *mut Part, choice: c_int, search_x_min: i16, search_x_max: i16, search_y_min: i16, search_y_max: i16);
+}
+
+// `part_alloc_borders` (still C, above) allocates `borders_data` with libc `malloc` and is
+// NOT part of this port, so the buffer it hands out must still be released with libc `free`
+// rather than Rust's `dealloc` (which would reconstruct a `Layout` the allocator that made
+// the memory never used). Import `free` itself rather than moving `part_alloc_borders` /
+// `part_free_borders`.
+extern "C" {
+    fn free(ptr: *mut std::os::raw::c_void);
+}
+
+/// TIMWIN: 1078:00f2 (allocation half)
+///
+/// Safety: `alloc_zeroed` either returns a valid, freshly zeroed `Part`-sized allocation or
+/// null; the null case is passed straight through to the caller (matching the C, which also
+/// returned `0` from `malloc` failure) rather than being dereferenced here, so there is no
+/// dereference in this function at all.
+#[no_mangle]
+pub extern "C" fn part_alloc() -> *mut Part {
+    let layout = std::alloc::Layout::new::<Part>();
+    unsafe {
+        let p = std::alloc::alloc_zeroed(layout) as *mut Part;
+        if p.is_null() { std::ptr::null_mut() } else { p }
+    }
+}
+
+/// TIMWIN: 1078:1402
+///
+/// Safety: every dereference of `part` is guarded by the leading null check, matching the
+/// C's `if (!part) return;`. Once past that check `part` is a live, uniquely-owned `Part`
+/// (callers give up ownership when they call `part_free`, mirroring `free()`), so reading
+/// its fields and freeing the buffers it points at is sound. The three interior pointers
+/// (`borders_data`, `belt_data`, `rope_data[0]`) are each null-checked before use, matching
+/// the C's `if (part->x) free(part->x)` guards.
+///
+/// Ownership rules preserved exactly from the C:
+///   - `borders_data`: always freed here if non-null. It is allocated by `part_alloc_borders`
+///     (still C, using `malloc`), so it is released with libc `free`, not Rust `dealloc`.
+///   - `belt_data`: freed only when flag `F2_0001` is clear, matching the C's
+///     `NO_FLAGS(part->flags2, F2_0001)`. When the flag is set this part merely points at a
+///     belt buffer owned by another part, so freeing it here would be a double free.
+///   - `rope_data[0]`: freed only when `part_type` is `Pulley` or `Rope`, matching the C's
+///     `part->type == P_PULLEY || part->type == P_ROPE`. Every other part type merely links
+///     to a rope owned by the pulley/rope that created it; `rope_data[1]` is never owned by
+///     this part and is never freed here (matching the C, which never frees it either).
+#[no_mangle]
+pub extern "C" fn part_free(part: *mut Part) {
+    unsafe {
+        if part.is_null() {
+            return;
+        }
+
+        if !(*part).borders_data.is_null() {
+            free((*part).borders_data as *mut std::os::raw::c_void);
+        }
+        if !(*part).belt_data.is_null() && (*part).flags2 & 0x0001 == 0 /* F2_0001 clear */ {
+            let layout = std::alloc::Layout::new::<BeltData>();
+            std::alloc::dealloc((*part).belt_data as *mut u8, layout);
+        }
+        let rope0 = (*part).rope_data[0];
+        if !rope0.is_null()
+            && ((*part).part_type == PartType::Pulley as u16 || (*part).part_type == PartType::Rope as u16)
+        {
+            let layout = std::alloc::Layout::new::<RopeData>();
+            std::alloc::dealloc(rope0 as *mut u8, layout);
+        }
+
+        let layout = std::alloc::Layout::new::<Part>();
+        std::alloc::dealloc(part as *mut u8, layout);
+    }
+}
+
+/// Safety: mirrors `part_alloc` — returns null on allocation failure without dereferencing
+/// anything, or a fresh zeroed `BeltData`-sized allocation.
+#[no_mangle]
+pub extern "C" fn belt_data_alloc() -> *mut BeltData {
+    let layout = std::alloc::Layout::new::<BeltData>();
+    unsafe {
+        let p = std::alloc::alloc_zeroed(layout) as *mut BeltData;
+        if p.is_null() { std::ptr::null_mut() } else { p }
+    }
+}
+
+/// Safety: mirrors `part_alloc` — returns null on allocation failure without dereferencing
+/// anything, or a fresh zeroed `RopeData`-sized allocation.
+#[no_mangle]
+pub extern "C" fn rope_data_alloc() -> *mut RopeData {
+    let layout = std::alloc::Layout::new::<RopeData>();
+    unsafe {
+        let p = std::alloc::alloc_zeroed(layout) as *mut RopeData;
+        if p.is_null() { std::ptr::null_mut() } else { p }
+    }
+}
+
+// Only used this for debugging purposes
+///
+/// Safety: no pointer dereferences at all — just reports a compile-time constant size.
+#[no_mangle]
+pub extern "C" fn debug_part_size() -> usize {
+    std::mem::size_of::<Part>()
+}
+
+/// TIMWIN: 10a8:1e18
+///
+/// Safety: `part->prev` is unconditionally dereferenced, matching the C exactly
+/// (`part->prev->next = part->next;` has no null check either). This is sound because every
+/// part in these doubly linked lists is threaded onto a permanent sentinel root
+/// (`STATIC_PARTS_ROOT` / `MOVING_PARTS_ROOT` / `PARTS_BIN_ROOT`), so `prev` is never null for
+/// a part that is actually linked into a list; callers only ever call this on linked parts.
+/// `part` itself is assumed non-null and valid by the same contract the C relied on (no null
+/// check existed there either). `part->next` is null-checked before dereferencing, matching
+/// the C's `if (part->next) { part->next->prev = part->prev; }`.
+#[no_mangle]
+pub extern "C" fn remove_part_from_linked_list(part: *mut Part) {
+    unsafe {
+        (*(*part).prev).next = (*part).next;
+        if !(*part).next.is_null() {
+            (*(*part).next).prev = (*part).prev;
+        }
+    }
 }
 
 // The globals below now live in src/globals.rs; re-export them so existing call sites

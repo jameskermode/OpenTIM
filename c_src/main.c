@@ -189,31 +189,7 @@ struct Part* next_part_or_fallback(struct Part *part, int choice) {
     return 0;
 }
 
-/* TIMWIN: 1078:1402 */
-void part_free(struct Part *part) {
-    if (!part) return;
-
-    if (part->borders_data) {
-        free(part->borders_data);
-    }
-    if (part->belt_data && NO_FLAGS(part->flags2, F2_0001)) {
-        free(part->belt_data);
-    }
-    if (part->rope_data[0] && (part->type == P_PULLEY || part->type == P_ROPE)) {
-        // Only free rope_data[0] if the part owns it (only pulleys and ropes can own it)
-        // rope_data[1] is always shared.
-        free(part->rope_data[0]);
-    }
-    free(part);
-}
-
-struct Part* part_alloc() {
-    struct Part *part = malloc(sizeof(struct Part));
-    if (!part) return 0;
-
-    memset(part, 0, sizeof(struct Part));
-    return part;
-}
+// part_free and part_alloc have moved to Rust (src/tim_c.rs).
 
 void part_free_borders(struct Part *part) {
     if (part->borders_data) {
@@ -229,21 +205,7 @@ void part_alloc_borders(struct Part *part, u16 length) {
     part->borders_data = malloc(sizeof(struct BorderPoint) * part->num_borders);
 }
 
-struct BeltData* belt_data_alloc() {
-    struct BeltData *belt = malloc(sizeof(struct BeltData));
-    if (!belt) return 0;
-
-    memset(belt, 0, sizeof(struct BeltData));
-    return belt;
-}
-
-struct RopeData* rope_data_alloc() {
-    struct RopeData *rope = malloc(sizeof(struct RopeData));
-    if (!rope) return 0;
-
-    memset(rope, 0, sizeof(struct RopeData));
-    return rope;
-}
+// belt_data_alloc and rope_data_alloc have moved to Rust (src/tim_c.rs).
 
 void part_init_rope_data_primary(struct Part *part) {
     struct RopeData *rope = rope_data_alloc();
@@ -299,18 +261,7 @@ error:
     return 0;
 }
 
-// Only used this for debugging purposes
-size_t debug_part_size() {
-    return sizeof(struct Part);
-}
-
-/* TIMWIN: 10a8:1e18 */
-void remove_part_from_linked_list(struct Part *part) {
-    part->prev->next = part->next;
-    if (part->next) {
-        part->next->prev = part->prev;
-    }
-}
+// debug_part_size and remove_part_from_linked_list have moved to Rust (src/tim_c.rs).
 
 /* TIMWIN: 10a8:44d5 */
 static inline void move_llama2_to_beginning_of_llama1() {
