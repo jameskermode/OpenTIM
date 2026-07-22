@@ -8,7 +8,6 @@ use crate::parts;
 /**** Import C declarations to Rust ****/
 extern {
     pub fn part_new(part_type: c_int) -> *mut Part;
-    pub fn part_init_rope_data_primary(part: *mut Part);
     pub fn part_init_belt_data(part: *mut Part);
     pub fn part_calculate_border_normals(part: *mut Part);
     pub fn part_set_size_and_pos_render(part: *mut Part);
@@ -186,6 +185,28 @@ pub extern "C" fn rope_data_alloc() -> *mut RopeData {
     unsafe {
         let p = std::alloc::alloc_zeroed(layout) as *mut RopeData;
         if p.is_null() { std::ptr::null_mut() } else { p }
+    }
+}
+
+/// This C source line never carried a `TIMWIN: seg:off` tag. Like `belt_data_alloc`/
+/// `rope_data_alloc` immediately above, it is a thin allocate-and-link helper with no
+/// originating address of its own, so it is exempted in `scripts/verify.sh`'s
+/// `TIMWIN_ALLOWLIST` for the same reason.
+///
+/// Safety: `part` is dereferenced unconditionally to store `rope`, matching the C (no null
+/// check on `part` there either). `rope` (the result of `rope_data_alloc`) is null-checked
+/// before being dereferenced to set `rope_or_pulley_part`, exactly matching the C's `if
+/// (!rope) { return; }` guard, so the null-allocation-failure path never dereferences the
+/// null pointer.
+#[no_mangle]
+pub extern "C" fn part_init_rope_data_primary(part: *mut Part) {
+    unsafe {
+        let rope = rope_data_alloc();
+        (*part).rope_data[0] = rope;
+        if rope.is_null() {
+            return;
+        }
+        (*rope).rope_or_pulley_part = part;
     }
 }
 

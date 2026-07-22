@@ -148,14 +148,7 @@ struct Part* next_part_or_fallback(struct Part *part, int choice) {
 
 // belt_data_alloc and rope_data_alloc have moved to Rust (src/tim_c.rs).
 
-void part_init_rope_data_primary(struct Part *part) {
-    struct RopeData *rope = rope_data_alloc();
-    part->rope_data[0] = rope;
-    if (!rope) {
-        return;
-    }
-    rope->rope_or_pulley_part = part;
-}
+// part_init_rope_data_primary has moved to Rust (src/tim_c.rs).
 
 void part_init_belt_data(struct Part *part) {
     struct BeltData *belt = belt_data_alloc();

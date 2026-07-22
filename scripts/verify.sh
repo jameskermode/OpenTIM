@@ -95,17 +95,20 @@ TIMWIN_SOURCES="src/tim_c.rs src/parts/mod.rs src/wasm_libc.rs"
 # task that added this check); it must only grow for the same reason -- a NEW omission
 # should fail, not get silently added here.
 #
-# part_alloc_borders/part_free_borders joined this list for exactly that reason, not as a new
-# exception to it: like their neighbours belt_data_alloc/rope_data_alloc, the C source they
-# were transliterated from never carried a TIMWIN tag either, and Ghidra decompilation of the
-# per-part-type reset functions that call them (e.g. TIMWIN 1048:051c, 10d0:0e7a) confirms why
-# -- in the original binary, borders_data is already valid by the time that type-specific code
-# runs, with no allocation call anywhere nearby. This project's malloc-based per-instance
-# border buffer is its own abstraction with no single originating address, exactly like
-# belt_data_alloc/rope_data_alloc's BeltData/RopeData allocations.
+# part_alloc_borders/part_free_borders/part_init_rope_data_primary joined this list for
+# exactly that reason, not as a new exception to it: like their neighbours
+# belt_data_alloc/rope_data_alloc, the C source they were transliterated from never carried a
+# TIMWIN tag either, and Ghidra decompilation of the per-part-type reset functions that call
+# part_alloc_borders (e.g. TIMWIN 1048:051c, 10d0:0e7a) confirms why -- in the original binary,
+# borders_data is already valid by the time that type-specific code runs, with no allocation
+# call anywhere nearby. This project's malloc-based per-instance border buffer, and the
+# rope/belt allocate-and-link helpers next to it, are this project's own abstraction with no
+# single originating address, exactly like belt_data_alloc/rope_data_alloc's
+# BeltData/RopeData allocations.
 TIMWIN_ALLOWLIST="unimplemented output_c output_part_c output_int_c arctan_c sine_c \
 cosine_c rotate_point_c calculate_line_intersection calculate_line_intersection_helper \
-belt_data_alloc rope_data_alloc part_alloc_borders part_free_borders debug_part_size \
+belt_data_alloc rope_data_alloc part_alloc_borders part_free_borders \
+part_init_rope_data_primary debug_part_size \
 part_image_size part_density part_mass \
 part_bounciness part_friction part_order part_data30_flags1 part_data30_flags3 \
 part_data30_size_something2 part_data30_size part_data31_render_pos_offset \
