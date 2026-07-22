@@ -9,7 +9,6 @@ use crate::parts;
 extern {
     pub fn part_new(part_type: c_int) -> *mut Part;
     pub fn part_calculate_border_normals(part: *mut Part);
-    pub fn part_set_size_and_pos_render(part: *mut Part);
     pub fn restore_parts_state_from_design();
     pub fn advance_parts();
     pub fn insert_part_into_static_parts(part: *mut Part);
@@ -1634,6 +1633,65 @@ pub extern "C" fn part_set_size(part: *mut Part) {
 
         (*part).size.x = 0;
         (*part).size.y = 0;
+    }
+}
+
+/// TIMWIN: 10a8:252b
+///
+/// Safety: `part` is dereferenced unconditionally throughout, matching the C (no null check
+/// anywhere in the original). `state1` and `flags2` are captured into locals before calling
+/// `part_set_size` (which never touches either field), exactly mirroring the C's own
+/// local-variable capture order. `v` is only read after `part_data31_render_pos_offset`
+/// returns non-zero, matching the C's `if (!part_data31_render_pos_offset(...)) return;`
+/// early-out (the C never reads an uninitialized `v` either).
+///
+/// `state1` (`i16`) is converted to `u16` via `as u16`, matching C's implicit `s16 -> u16`
+/// conversion on assignment to `u16 state1 = part->state1;` (same bit pattern, no value
+/// change since both are 16 bits wide).
+///
+/// Each `pos_render` update mirrors C's integer promotion exactly: `v.x`/`v.y` (`i8`) and
+/// the various `i16` fields all promote to `i32` for the addition/subtraction, and only the
+/// final result truncates back to `i16` on assignment -- e.g.
+/// `part->pos_render.x += part->size_something.x - v.x - part->size.x` computes the whole
+/// right-hand side in `int` before truncating, not `i16` at each step, so intermediate
+/// overflow (if any) behaves exactly as it would in C.
+///
+/// Gate-exercised: yes. This runs every tick for every moving part via `adjust_part_position`
+/// (still C, calls it directly) and via `restore_parts_state_from_design`, so all 28
+/// golden-baseline level/tick combinations exercise it, including both the `NO_FLAGS`/flip
+/// branches (parts with `F2_FLIP_HORZ`/`F2_FLIP_VERT` set appear in the test levels) and the
+/// early-return path (part types with no `render_pos_offsets` table).
+#[no_mangle]
+pub extern "C" fn part_set_size_and_pos_render(part: *mut Part) {
+    unsafe {
+        (*part).pos_render = (*part).pos;
+        let state1 = (*part).state1 as u16;
+        let flags2 = (*part).flags2;
+        part_set_size(part);
+
+        let mut v = SByteVec { x: 0, y: 0 };
+        if part_data31_render_pos_offset((*part).part_type as c_int, state1, &mut v) == 0 {
+            return;
+        }
+
+        const F2_FLIP_HORZ: u16 = 0x0010;
+        const F2_FLIP_VERT: u16 = 0x0020;
+
+        if flags2 & F2_FLIP_HORZ == 0 {
+            (*part).pos_render.x = ((*part).pos_render.x as i32 + v.x as i32) as i16;
+        } else {
+            (*part).pos_render.x = ((*part).pos_render.x as i32
+                + ((*part).size_something.x as i32 - v.x as i32 - (*part).size.x as i32))
+                as i16;
+        }
+
+        if flags2 & F2_FLIP_VERT == 0 {
+            (*part).pos_render.y = ((*part).pos_render.y as i32 + v.y as i32) as i16;
+        } else {
+            (*part).pos_render.y = ((*part).pos_render.y as i32
+                + ((*part).size_something.y as i32 - v.y as i32 - (*part).size.y as i32))
+                as i16;
+        }
     }
 }
 

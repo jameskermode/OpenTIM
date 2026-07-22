@@ -120,6 +120,7 @@ int llama2_insert_by_force(struct Part *part_a, struct Part *part_b);
 void queue_dirty_rect(struct ShortVec *pos, struct ShortVec *size, u8 param3, u8 param4, s16 param5);
 void queue_rope_dirty_rects(struct Part *part, int _unused);
 void part_set_size(struct Part *part);
+void part_set_size_and_pos_render(struct Part *part);
 s16 teeter_totter_helper_get_part_speed(struct Part *part);
 s16 distance_to_rope_link(struct RopeData *rope, struct Part *part, s16 *out_x, s16 *out_y);
 void bucket_handle_contained_parts(struct Part *bucket);

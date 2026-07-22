@@ -191,30 +191,7 @@ static inline void move_llama2_to_beginning_of_llama1() {
 
 // part_set_size has moved to Rust (src/tim_c.rs).
 
-/* TIMWIN: 10a8:252b */
-void part_set_size_and_pos_render(struct Part *part) {
-    part->pos_render = part->pos;
-    u16 state1 = part->state1;
-    u16 flags2 = part->flags2;
-    part_set_size(part);
-
-    struct SByteVec v;
-    if (!part_data31_render_pos_offset(part->type, state1, &v)) {
-        return;
-    }
-
-    if (NO_FLAGS(flags2, F2_FLIP_HORZ)) {
-        part->pos_render.x += v.x;
-    } else {
-        part->pos_render.x += part->size_something.x - v.x - part->size.x;
-    }
-
-    if (NO_FLAGS(flags2, F2_FLIP_VERT)) {
-        part->pos_render.y += v.y;
-    } else {
-        part->pos_render.y += part->size_something.y - v.y - part->size.y;
-    }
-}
+// part_set_size_and_pos_render has moved to Rust (src/tim_c.rs).
 
 /* TIMWIN: 1090:0240
    Accurate */
