@@ -90,8 +90,6 @@ struct Line; // forward declaration: struct Line itself is defined below, after 
              // four_points_adjust_p1_by_one's prototype below would get function-prototype
              // scope, making it a distinct incomplete type from the real file-scope struct.
 
-struct Part* next_part_or_fallback(struct Part *part, int choice);
-
 // Defined in Rust (src/tim_c.rs).
 struct Part* part_alloc();
 void part_free(struct Part *part);
@@ -104,6 +102,7 @@ void part_init_belt_data(struct Part *part);
 size_t debug_part_size();
 void remove_part_from_linked_list(struct Part *part);
 struct Part* get_first_part(int choice);
+struct Part* next_part_or_fallback(struct Part *part, int choice);
 u16 part_get_movement_delta_angle(struct Part *part);
 void bucket_add_mass(struct Part *bucket, struct Part *part);
 bool calculate_intersecting_rect(struct GDIRect *out, struct GDIRect *a, struct GDIRect *b);

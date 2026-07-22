@@ -1042,6 +1042,33 @@ pub extern "C" fn get_first_part(choice: c_int) -> *mut Part {
     }
 }
 
+/// TIMWIN: 10a8:24d8
+///
+/// Safety: `part` is dereferenced unconditionally, matching the C (no null check there
+/// either -- every call site, including the `EACH_STATIC_THEN_MOVING_PART` iteration macro
+/// in `c_src/tim.h`, only ever passes a live part just yielded by a previous call to this
+/// function or to `get_first_part`). `part->next`, when non-null, is returned directly
+/// without any further dereference. The two fallback paths read `part->flags1` (again
+/// unconditionally, matching the C) and otherwise only touch `get_first_part` (which itself
+/// only reads the permanent sentinel `Part`s' `.next` fields) or `PARTS_BIN_ROOT` directly,
+/// both safe to read for the whole program lifetime.
+#[no_mangle]
+pub extern "C" fn next_part_or_fallback(part: *mut Part, choice: c_int) -> *mut Part {
+    const CHOOSE_FROM_PARTS_BIN: c_int = 0x800;
+    unsafe {
+        if !(*part).next.is_null() {
+            return (*part).next;
+        }
+        if (*part).flags1 & 0x2000 != 0 /* F1_2000 */ {
+            return get_first_part(choice);
+        }
+        if (*part).flags1 & 0x1000 != 0 /* F1_1000 */ && (choice & CHOOSE_FROM_PARTS_BIN) != 0 {
+            return PARTS_BIN_ROOT.next;
+        }
+        std::ptr::null_mut()
+    }
+}
+
 /// TIMWIN: 10a8:03ac
 ///
 /// Safety: no pointer is ever touched here. `a` and `b` are plain `enum PartType` values

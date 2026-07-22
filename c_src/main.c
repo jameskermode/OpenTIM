@@ -126,21 +126,7 @@ void part_calculate_border_normals(struct Part *part) {
     calculate_border_normal_segment(part->borders_data + part->num_borders-1, part->borders_data);
 }
 
-// get_first_part and part_set_size have moved to Rust (src/tim_c.rs).
-
-/* TIMWIN: 10a8:24d8 */
-struct Part* next_part_or_fallback(struct Part *part, int choice) {
-    if (part->next) {
-        return part->next;
-    }
-    if (ANY_FLAGS(part->flags1, F1_2000)) {
-        return get_first_part(choice);
-    }
-    if (ANY_FLAGS(part->flags1, F1_1000) && (choice & CHOOSE_FROM_PARTS_BIN)) {
-        return PARTS_BIN_ROOT.next;
-    }
-    return 0;
-}
+// get_first_part, part_set_size and next_part_or_fallback have moved to Rust (src/tim_c.rs).
 
 // part_free and part_alloc have moved to Rust (src/tim_c.rs).
 
