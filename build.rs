@@ -80,4 +80,35 @@ fn main() {
     }
 
     builder.compile("tim_c");
+
+    // ---- Differential-testing reference C (tests only, native only) ----
+    //
+    // tests/differential/reference.c holds `ref_part_borders_intersect`, a frozen,
+    // verbatim-from-git-history copy of the original decompiled `part_borders_intersect`
+    // (see the header comment in that file for provenance). It is compiled into its own
+    // separate static lib -- distinct from "tim_c" above -- so linking never even
+    // pretends it's part of the game's real C sources.
+    //
+    // build.rs has no reliable way to ask cargo "is this specifically a `cargo test`
+    // invocation?" -- build scripts are re-used across `build`/`test`/`check` for the same
+    // (package, target, profile, features) tuple, and their env vars are identical either
+    // way (verified empirically: diffing every CARGO_*/PROFILE/TARGET var between `cargo
+    // build --lib -vv` and `cargo test --lib --no-run -vv` on this crate showed zero
+    // difference). So this always compiles the tiny reference.c on non-wasm targets.
+    // That's fine in practice: nothing in the normal binary or cdylib ever references
+    // `ref_part_borders_intersect`, so the linker never pulls this object out of the
+    // archive for anything except the differential test binary (which does reference it).
+    // The normal build's output is therefore unaffected -- same symbols, same behaviour --
+    // only the differential test binary actually links this code in.
+    //
+    // wasm is excluded outright, per the requirement that this must never affect (or even
+    // attempt to affect) the wasm build: the freestanding wasm target has no libc, no
+    // `struct Part`-compatible ABI expectations checked here, and no reason to carry test
+    // infrastructure into a build that ships to players.
+    if !target.starts_with("wasm32") {
+        cc::Build::new()
+            .file("tests/differential/reference.c")
+            .include("c_src")
+            .compile("tim_c_differential");
+    }
 }
